@@ -72,7 +72,7 @@ class UserResponse(UserBase):
     is_active: bool
     created_at: datetime
     updated_at: Optional[datetime] = None
-    
+
     class Config:
         from_attributes = True
 
@@ -114,7 +114,7 @@ class StudentResponse(StudentBase):
     user_id: int
     created_at: datetime
     updated_at: Optional[datetime] = None
-    
+
     class Config:
         from_attributes = True
 
@@ -130,9 +130,9 @@ class ClearanceRequestResponse(BaseModel):
     request_date: datetime
     overall_status: str
     collection_eligible: bool
-    collection_eligible_date: Optional[datetime]
+    collection_eligible_date: Optional[datetime] = None  # Make optional
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime] = None  # Make optional
     
     # Nested data
     student: Optional[StudentResponse] = None
@@ -160,7 +160,7 @@ class FinanceClearanceResponse(BaseModel):
     cleared_by: Optional[int] = None
     cleared_at: Optional[datetime] = None
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime] = None  # Make optional
     
     class Config:
         from_attributes = True
@@ -187,7 +187,7 @@ class ExaminationClearanceResponse(BaseModel):
     cleared_by: Optional[int] = None
     cleared_at: Optional[datetime] = None
     created_at: datetime
-    updated_at: datetime
+    updated_at: Optional[datetime] = None  # Make optional
     
     class Config:
         from_attributes = True
@@ -222,7 +222,9 @@ class RegistryInventoryResponse(BaseModel):
     hold_until: Optional[datetime] = None
     is_replacement: bool = False
     collection_id: Optional[int] = None
-    
+    created_at: datetime
+    updated_at: Optional[datetime] = None  # Added for consistency
+
     class Config:
         from_attributes = True
 
@@ -254,8 +256,8 @@ class AppointmentResponse(BaseModel):
     notes: Optional[str] = None
     created_by: int
     created_at: datetime
-    updated_at: datetime
-    
+    updated_at: Optional[datetime] = None  # Added for consistency
+
     class Config:
         from_attributes = True
 
@@ -284,7 +286,7 @@ class CollectionResponse(BaseModel):
     acknowledgement_received: bool = True
     notes: Optional[str] = None
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
 
@@ -301,7 +303,7 @@ class NotificationResponse(BaseModel):
     link: Optional[str] = None
     extra_data: Optional[dict] = None
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
 
@@ -331,7 +333,7 @@ class AuditLogResponse(BaseModel):
     ip_address: Optional[str] = None
     user_agent: Optional[str] = None
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
 
@@ -351,7 +353,7 @@ class ClearanceStatsResponse(BaseModel):
     certificates_ready: int
     certificates_collected: int
     appointments_scheduled: int
-    
+
     # Department queues
     finance_queue: int
     examination_queue: int
@@ -383,7 +385,9 @@ class CertificateResponse(BaseModel):
     remarks: Optional[str] = None
     verified_count: int = 0
     last_verified_at: Optional[datetime] = None
-    
+    created_at: datetime
+    updated_at: Optional[datetime] = None  # Added for consistency
+
     class Config:
         from_attributes = True
 

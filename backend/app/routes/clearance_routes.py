@@ -107,22 +107,100 @@ async def get_my_clearance_status(
     return clearance
 
 # ========================================
-# FINANCE OFFICE ENDPOINTS
+# FINANCE OFFICE ENDPOINTS - FIXED
 # ========================================
 
-@router.get("/finance/pending", response_model=List[ClearanceRequestResponse])
+@router.get("/finance/pending")
 async def get_finance_pending(
     db: Session = Depends(get_db),
     current_user: User = Depends(role_required(["finance", "super_admin"]))
 ):
-    """Get all pending finance clearances"""
-    pending = db.query(ClearanceRequest).join(
-        FinanceClearance
-    ).filter(
-        FinanceClearance.status == ClearanceStatus.PENDING
-    ).all()
+    """Get all students with finance status (pending or not_cleared)"""
 
-    return pending
+    # Get all students
+    students = db.query(Student).all()
+    result = []
+
+    for student in students:
+        # Get clearance
+        clearance = db.query(ClearanceRequest).filter(
+            ClearanceRequest.student_id == student.id
+        ).first()
+
+        finance_status = "pending"
+        exam_status = "pending"
+        overall_status = "not_applied"
+
+        if clearance:
+            # Get finance clearance
+            finance = db.query(FinanceClearance).filter(
+                FinanceClearance.clearance_request_id == clearance.id
+            ).first()
+            if finance:
+                finance_status = finance.status.value if hasattr(finance.status, 'value') else str(finance.status)
+
+            # Get examination clearance
+            exam = db.query(ExaminationClearance).filter(
+                ExaminationClearance.clearance_request_id == clearance.id
+            ).first()
+            if exam:
+                exam_status = exam.status.value if hasattr(exam.status, 'value') else str(exam.status)
+
+            overall_status = clearance.overall_status
+
+        # Only include students with pending or not_cleared finance
+        if finance_status in ["pending", "not_cleared"]:
+            result.append({
+                "id": student.id,
+                "student_id": student.student_id,
+                "student_user_id": clearance.student_user_id if clearance else None,
+                "request_date": clearance.request_date.isoformat() if clearance else None,
+                "overall_status": overall_status,
+                "collection_eligible": clearance.collection_eligible if clearance else False,
+                "collection_eligible_date": clearance.collection_eligible_date.isoformat() if clearance and clearance.collection_eligible_date else None,
+                "created_at": clearance.created_at.isoformat() if clearance else None,
+                "updated_at": clearance.updated_at.isoformat() if clearance else None,
+                "student": {
+                    "id": student.id,
+                    "student_id": student.student_id,
+                    "first_name": student.first_name,
+                    "last_name": student.last_name,
+                    "program": student.program,
+                    "year_of_study": student.year_of_study,
+                    "email": student.email,
+                    "user_id": student.user_id
+                },
+                "finance_clearance": {
+                    "id": finance.id if finance else None,
+                    "clearance_request_id": finance.clearance_request_id if finance else None,
+                    "status": finance_status,
+                    "remarks": finance.remarks if finance else None,
+                    "amount_due": finance.amount_due if finance else 0,
+                    "amount_paid": finance.amount_paid if finance else 0,
+                    "outstanding_balance": finance.outstanding_balance if finance else 0,
+                    "cleared_by": finance.cleared_by if finance else None,
+                    "cleared_at": finance.cleared_at.isoformat() if finance and finance.cleared_at else None,
+                    "created_at": finance.created_at.isoformat() if finance else None,
+                    "updated_at": finance.updated_at.isoformat() if finance and finance.updated_at else None
+                } if finance else None,
+                "examination_clearance": {
+                    "id": exam.id if exam else None,
+                    "clearance_request_id": exam.clearance_request_id if exam else None,
+                    "status": exam_status,
+                    "remarks": exam.remarks if exam else None,
+                    "results_released": exam.results_released if exam else False,
+                    "program_completed": exam.program_completed if exam else False,
+                    "graduation_approved": exam.graduation_approved if exam else False,
+                    "no_missing_grades": exam.no_missing_grades if exam else False,
+                    "credits_completed": exam.credits_completed if exam else False,
+                    "cleared_by": exam.cleared_by if exam else None,
+                    "cleared_at": exam.cleared_at.isoformat() if exam and exam.cleared_at else None,
+                    "created_at": exam.created_at.isoformat() if exam else None,
+                    "updated_at": exam.updated_at.isoformat() if exam and exam.updated_at else None
+                } if exam else None
+            })
+
+    return result
 
 @router.put("/finance/{clearance_id}", response_model=FinanceClearanceResponse)
 async def update_finance_clearance(
@@ -202,22 +280,100 @@ async def update_finance_clearance(
     return finance
 
 # ========================================
-# EXAMINATION OFFICE ENDPOINTS
+# EXAMINATION OFFICE ENDPOINTS - FIXED
 # ========================================
 
-@router.get("/examination/pending", response_model=List[ClearanceRequestResponse])
+@router.get("/examination/pending")
 async def get_examination_pending(
     db: Session = Depends(get_db),
     current_user: User = Depends(role_required(["examination_office", "super_admin"]))
 ):
-    """Get all pending examination clearances"""
-    pending = db.query(ClearanceRequest).join(
-        ExaminationClearance
-    ).filter(
-        ExaminationClearance.status == ClearanceStatus.PENDING
-    ).all()
+    """Get all students with examination status (pending or not_cleared)"""
 
-    return pending
+    # Get all students
+    students = db.query(Student).all()
+    result = []
+
+    for student in students:
+        # Get clearance
+        clearance = db.query(ClearanceRequest).filter(
+            ClearanceRequest.student_id == student.id
+        ).first()
+
+        finance_status = "pending"
+        exam_status = "pending"
+        overall_status = "not_applied"
+
+        if clearance:
+            # Get finance clearance
+            finance = db.query(FinanceClearance).filter(
+                FinanceClearance.clearance_request_id == clearance.id
+            ).first()
+            if finance:
+                finance_status = finance.status.value if hasattr(finance.status, 'value') else str(finance.status)
+
+            # Get examination clearance
+            exam = db.query(ExaminationClearance).filter(
+                ExaminationClearance.clearance_request_id == clearance.id
+            ).first()
+            if exam:
+                exam_status = exam.status.value if hasattr(exam.status, 'value') else str(exam.status)
+
+            overall_status = clearance.overall_status
+
+        # Only include students with pending or not_cleared examination
+        if exam_status in ["pending", "not_cleared"]:
+            result.append({
+                "id": student.id,
+                "student_id": student.student_id,
+                "student_user_id": clearance.student_user_id if clearance else None,
+                "request_date": clearance.request_date.isoformat() if clearance else None,
+                "overall_status": overall_status,
+                "collection_eligible": clearance.collection_eligible if clearance else False,
+                "collection_eligible_date": clearance.collection_eligible_date.isoformat() if clearance and clearance.collection_eligible_date else None,
+                "created_at": clearance.created_at.isoformat() if clearance else None,
+                "updated_at": clearance.updated_at.isoformat() if clearance else None,
+                "student": {
+                    "id": student.id,
+                    "student_id": student.student_id,
+                    "first_name": student.first_name,
+                    "last_name": student.last_name,
+                    "program": student.program,
+                    "year_of_study": student.year_of_study,
+                    "email": student.email,
+                    "user_id": student.user_id
+                },
+                "finance_clearance": {
+                    "id": finance.id if finance else None,
+                    "clearance_request_id": finance.clearance_request_id if finance else None,
+                    "status": finance_status,
+                    "remarks": finance.remarks if finance else None,
+                    "amount_due": finance.amount_due if finance else 0,
+                    "amount_paid": finance.amount_paid if finance else 0,
+                    "outstanding_balance": finance.outstanding_balance if finance else 0,
+                    "cleared_by": finance.cleared_by if finance else None,
+                    "cleared_at": finance.cleared_at.isoformat() if finance and finance.cleared_at else None,
+                    "created_at": finance.created_at.isoformat() if finance else None,
+                    "updated_at": finance.updated_at.isoformat() if finance and finance.updated_at else None
+                } if finance else None,
+                "examination_clearance": {
+                    "id": exam.id if exam else None,
+                    "clearance_request_id": exam.clearance_request_id if exam else None,
+                    "status": exam_status,
+                    "remarks": exam.remarks if exam else None,
+                    "results_released": exam.results_released if exam else False,
+                    "program_completed": exam.program_completed if exam else False,
+                    "graduation_approved": exam.graduation_approved if exam else False,
+                    "no_missing_grades": exam.no_missing_grades if exam else False,
+                    "credits_completed": exam.credits_completed if exam else False,
+                    "cleared_by": exam.cleared_by if exam else None,
+                    "cleared_at": exam.cleared_at.isoformat() if exam and exam.cleared_at else None,
+                    "created_at": exam.created_at.isoformat() if exam else None,
+                    "updated_at": exam.updated_at.isoformat() if exam and exam.updated_at else None
+                } if exam else None
+            })
+
+    return result
 
 @router.put("/examination/{clearance_id}", response_model=ExaminationClearanceResponse)
 async def update_examination_clearance(
@@ -425,41 +581,34 @@ async def search_inventory(
 ):
     """Advanced inventory search with multiple filters"""
     query = db.query(RegistryInventory)
-    
-    # Search by certificate number
+
     if certificate_number:
         query = query.filter(RegistryInventory.certificate_number.contains(certificate_number))
-    
-    # Search by student ID
+
     if student_id:
         query = query.filter(RegistryInventory.student_id == student_id)
-    
-    # Search by student name (join with Student table)
+
     if student_name:
         query = query.join(Student).filter(
             (Student.first_name.contains(student_name)) |
             (Student.last_name.contains(student_name)) |
             (Student.middle_name.contains(student_name))
         )
-    
-    # Search by programme
+
     if programme:
         query = query.filter(RegistryInventory.programme.contains(programme))
-    
-    # Search by status
+
     if status:
         query = query.filter(RegistryInventory.status == status)
-    
-    # Search by date range
+
     if date_from:
         query = query.filter(RegistryInventory.date_received >= date_from)
     if date_to:
         query = query.filter(RegistryInventory.date_received <= date_to)
-    
-    # Search by graduation year
+
     if graduation_year:
         query = query.filter(RegistryInventory.graduation_year == graduation_year)
-    
+
     return query.order_by(RegistryInventory.created_at.desc()).all()
 
 # ========================================
@@ -724,3 +873,216 @@ async def get_clearance_stats(
         examination_queue=exam_pending,
         registry_queue=certificates_ready
     )
+
+# ========================================
+# ALL STUDENTS WITH STATUS ENDPOINT
+# ========================================
+
+@router.get("/all-students-with-status")
+async def get_all_students_with_clearance(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get all students with their clearance status for each department"""
+    students = db.query(Student).all()
+    result = []
+
+    for student in students:
+        clearance = db.query(ClearanceRequest).filter(
+            ClearanceRequest.student_id == student.id
+        ).first()
+
+        finance_status = "pending"
+        exam_status = "pending"
+        overall_status = "not_applied"
+
+        if clearance:
+            finance = db.query(FinanceClearance).filter(
+                FinanceClearance.clearance_request_id == clearance.id
+            ).first()
+            exam = db.query(ExaminationClearance).filter(
+                ExaminationClearance.clearance_request_id == clearance.id
+            ).first()
+
+            finance_status = finance.status.value if finance else "pending"
+            exam_status = exam.status.value if exam else "pending"
+            overall_status = clearance.overall_status
+
+        result.append({
+            "student_id": student.id,
+            "student_number": student.student_id,
+            "name": f"{student.first_name} {student.last_name}",
+            "program": student.program,
+            "level": student.year_of_study,
+            "finance_status": finance_status,
+            "examination_status": exam_status,
+            "overall_status": overall_status,
+            "has_certificate": db.query(RegistryInventory).filter(
+                RegistryInventory.student_id == student.id
+            ).first() is not None
+        })
+
+    return result
+
+# ========================================
+# CLEARANCE WORKFLOW - STEP BY STEP
+# ========================================
+
+@router.get("/workflow/student/{student_id}")
+async def get_student_workflow(
+    student_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get complete workflow status for a student"""
+    
+    student = db.query(Student).filter(Student.id == student_id).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    
+    clearance = db.query(ClearanceRequest).filter(
+        ClearanceRequest.student_id == student.id
+    ).first()
+    
+    if not clearance:
+        return {
+            "student": {
+                "id": student.id,
+                "name": f"{student.first_name} {student.last_name}",
+                "student_id": student.student_id,
+                "program": student.program,
+                "level": student.year_of_study
+            },
+            "workflow": {
+                "step_1_finance": {"status": "not_started", "details": "Finance clearance not initiated"},
+                "step_2_examination": {"status": "not_started", "details": "Examination clearance not initiated"},
+                "step_3_academic": {"status": "not_started", "details": "Academic clearance not initiated"},
+                "step_4_dean": {"status": "not_started", "details": "Dean approval not initiated"},
+                "step_5_registry": {"status": "not_started", "details": "Registry clearance not initiated"},
+                "overall_status": "not_applied"
+            }
+        }
+    
+    # Get finance clearance
+    finance = db.query(FinanceClearance).filter(
+        FinanceClearance.clearance_request_id == clearance.id
+    ).first()
+    
+    # Get examination clearance
+    exam = db.query(ExaminationClearance).filter(
+        ExaminationClearance.clearance_request_id == clearance.id
+    ).first()
+    
+    # Get academic clearance (if exists)
+    academic = db.query(AcademicClearance).filter(
+        AcademicClearance.clearance_request_id == clearance.id
+    ).first() if hasattr(db, 'query') else None
+    
+    # Get dean approval (if exists)
+    dean = db.query(DeanApproval).filter(
+        DeanApproval.clearance_request_id == clearance.id
+    ).first() if hasattr(db, 'query') else None
+    
+    workflow = {
+        "student": {
+            "id": student.id,
+            "name": f"{student.first_name} {student.last_name}",
+            "student_id": student.student_id,
+            "program": student.program,
+            "level": student.year_of_study
+        },
+        "workflow": {
+            "step_1_finance": {
+                "status": finance.status if finance else "pending",
+                "details": finance.remarks if finance else "Awaiting finance verification",
+                "cleared_by": finance.cleared_by if finance else None,
+                "cleared_at": finance.cleared_at.isoformat() if finance and finance.cleared_at else None
+            },
+            "step_2_examination": {
+                "status": exam.status if exam else "pending",
+                "details": exam.remarks if exam else "Awaiting examination verification",
+                "cleared_by": exam.cleared_by if exam else None,
+                "cleared_at": exam.cleared_at.isoformat() if exam and exam.cleared_at else None
+            },
+            "step_3_academic": {
+                "status": "cleared" if clearance.overall_status == "cleared" else "pending",
+                "details": "Academic records verified" if clearance.overall_status == "cleared" else "Pending academic review"
+            },
+            "step_4_dean": {
+                "status": "cleared" if clearance.overall_status == "cleared" else "pending",
+                "details": "Dean approval granted" if clearance.overall_status == "cleared" else "Pending dean approval"
+            },
+            "step_5_registry": {
+                "status": "ready" if clearance.collection_eligible else "pending",
+                "details": "Certificate ready for collection" if clearance.collection_eligible else "Awaiting registry processing"
+            },
+            "overall_status": clearance.overall_status,
+            "collection_eligible": clearance.collection_eligible
+        }
+    }
+    
+    return workflow
+
+@router.get("/workflow/department/{department}")
+async def get_department_workflow(
+    department: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get all students at a specific workflow step"""
+    
+    # Map department to the correct status filter
+    department_map = {
+        "finance": "finance_status",
+        "examination": "examination_status",
+        "academic": "academic_status",
+        "dean": "dean_status",
+        "registry": "registry_status"
+    }
+    
+    if department not in department_map:
+        raise HTTPException(status_code=400, detail="Invalid department")
+    
+    # Get all students with their clearance status
+    students = db.query(Student).all()
+    result = []
+    
+    for student in students:
+        clearance = db.query(ClearanceRequest).filter(
+            ClearanceRequest.student_id == student.id
+        ).first()
+        
+        if not clearance:
+            continue
+        
+        # Get department-specific status
+        if department == "finance":
+            finance = db.query(FinanceClearance).filter(
+                FinanceClearance.clearance_request_id == clearance.id
+            ).first()
+            status = finance.status if finance else "pending"
+        elif department == "examination":
+            exam = db.query(ExaminationClearance).filter(
+                ExaminationClearance.clearance_request_id == clearance.id
+            ).first()
+            status = exam.status if exam else "pending"
+        else:
+            status = "pending"
+        
+        # Only include students pending or not_cleared for this department
+        if status in ["pending", "not_cleared"]:
+            result.append({
+                "student_id": student.id,
+                "student_number": student.student_id,
+                "name": f"{student.first_name} {student.last_name}",
+                "program": student.program,
+                "level": student.year_of_study,
+                "status": status,
+                "clearance_id": clearance.id
+            })
+    
+    return {
+        "department": department,
+        "pending_count": len(result),
+        "students": result
+    }
