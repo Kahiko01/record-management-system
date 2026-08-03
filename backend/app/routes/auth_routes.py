@@ -13,12 +13,15 @@ from ..utils.audit import log_audit
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
+from ..core.permissions import require_permission, Permission
+
 @router.post("/register", response_model=UserResponse)
 async def register_user(
     user_data: UserCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(role_required(["super_admin"]))
+    current_user: User = Depends(require_permission(Permission.ADMIN_MANAGE_USERS))
 ):
+    # ... rest of the code
     # Check if user exists
     db_user = db.query(User).filter(User.username == user_data.username).first()
     if db_user:

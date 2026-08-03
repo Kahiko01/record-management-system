@@ -7,7 +7,8 @@ from ..core.database import get_db
 from ..models.models import (
     User, StorageLocation, RegistryInventory, StorageLocationHistory
 )
-from ..auth.auth import get_current_active_user, role_required
+from ..auth.auth import get_current_active_user
+from ..core.permissions import require_permission, Permission, require_role
 from ..utils.audit import log_audit
 
 router = APIRouter(prefix="/storage", tags=["Storage"])
@@ -54,7 +55,7 @@ class StorageLocationResponse(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: Optional[datetime]
-    
+
     class Config:
         from_attributes = True
 
@@ -71,7 +72,7 @@ class StorageHistoryResponse(BaseModel):
     previous_location_id: Optional[int]
     notes: Optional[str]
     created_at: datetime
-    
+
     class Config:
         from_attributes = True
 
@@ -81,17 +82,17 @@ class StorageHistoryResponse(BaseModel):
 async def create_storage_location(
     location: StorageLocationCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(role_required(["super_admin", "registry_officer"]))
+    current_user: User = Depends(require_permission(Permission.ADMIN_MANAGE_INVENTORY))
 ):
     """Create a new storage location"""
-    
+
     # Check if code exists
     existing = db.query(StorageLocation).filter(
         StorageLocation.code == location.code
     ).first()
     if existing:
         raise HTTPException(status_code=400, detail="Location code already exists")
-    
+
     db_location = StorageLocation(
         **location.model_dump(),
         created_by=current_user.id
@@ -99,10 +100,10 @@ async def create_storage_location(
     db.add(db_location)
     db.commit()
     db.refresh(db_location)
-    
+
     await log_audit(db, current_user.id, "STORAGE_LOCATION_CREATED", "storage",
                     f"Created storage location: {location.code} - {location.name}")
-    
+
     return db_location
 
 @router.get("/locations", response_model=List[StorageLocationResponse])
@@ -111,24 +112,24 @@ async def get_storage_locations(
     limit: int = 100,
     is_active: Optional[bool] = True,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_permission(Permission.REGISTRY_VIEW_INVENTORY))
 ):
     """Get all storage locations"""
-    
+
     query = db.query(StorageLocation)
     if is_active is not None:
         query = query.filter(StorageLocation.is_active == is_active)
-    
+
     return query.offset(skip).limit(limit).all()
 
 @router.get("/locations/{location_id}", response_model=StorageLocationResponse)
 async def get_storage_location(
     location_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_permission(Permission.REGISTRY_VIEW_INVENTORY))
 ):
     """Get a specific storage location"""
-    
+
     location = db.query(StorageLocation).filter(
         StorageLocation.id == location_id
     ).first()
@@ -141,93 +142,93 @@ async def update_storage_location(
     location_id: int,
     location_update: StorageLocationUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(role_required(["super_admin", "registry_officer"]))
+    current_user: User = Depends(require_permission(Permission.ADMIN_MANAGE_INVENTORY))
 ):
     """Update a storage location"""
-    
+
     location = db.query(StorageLocation).filter(
         StorageLocation.id == location_id
     ).first()
     if not location:
         raise HTTPException(status_code=404, detail="Storage location not found")
-    
+
     for key, value in location_update.model_dump(exclude_unset=True).items():
         setattr(location, key, value)
-    
+
     db.commit()
     db.refresh(location)
-    
+
     await log_audit(db, current_user.id, "STORAGE_LOCATION_UPDATED", "storage",
                     f"Updated storage location: {location.code}")
-    
+
     return location
 
 @router.delete("/locations/{location_id}")
 async def delete_storage_location(
     location_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(role_required(["super_admin"]))
+    current_user: User = Depends(require_permission(Permission.ADMIN_MANAGE_INVENTORY))
 ):
     """Delete a storage location (only if no certificates assigned)"""
-    
+
     location = db.query(StorageLocation).filter(
         StorageLocation.id == location_id
     ).first()
     if not location:
         raise HTTPException(status_code=404, detail="Storage location not found")
-    
+
     # Check if certificates are assigned
     count = db.query(RegistryInventory).filter(
         RegistryInventory.storage_location_id == location_id
     ).count()
-    
+
     if count > 0:
         raise HTTPException(
-            status_code=400, 
+            status_code=400,
             detail=f"Cannot delete location with {count} certificates assigned. Move certificates first."
         )
-    
+
     db.delete(location)
     db.commit()
-    
+
     await log_audit(db, current_user.id, "STORAGE_LOCATION_DELETED", "storage",
                     f"Deleted storage location: {location.code}")
-    
+
     return {"message": "Storage location deleted successfully"}
 
 @router.post("/assign")
 async def assign_certificate_to_location(
     assignment: StorageAssignment,
     db: Session = Depends(get_db),
-    current_user: User = Depends(role_required(["super_admin", "registry_officer"]))
+    current_user: User = Depends(require_permission(Permission.ADMIN_MANAGE_INVENTORY))
 ):
     """Assign a certificate to a storage location"""
-    
+
     # Check certificate
     certificate = db.query(RegistryInventory).filter(
         RegistryInventory.id == assignment.certificate_id
     ).first()
     if not certificate:
         raise HTTPException(status_code=404, detail="Certificate not found")
-    
+
     # Check location
     location = db.query(StorageLocation).filter(
         StorageLocation.id == assignment.location_id
     ).first()
     if not location:
         raise HTTPException(status_code=404, detail="Storage location not found")
-    
+
     # Check capacity
     if location.current_count >= location.capacity:
         raise HTTPException(status_code=400, detail="Storage location is full")
-    
+
     # Record previous location
     previous_location_id = certificate.storage_location_id
-    
+
     # Update certificate
     certificate.storage_location_id = assignment.location_id
     certificate.storage_location = location.name
-    
+
     # Update location count
     if previous_location_id:
         prev_location = db.query(StorageLocation).filter(
@@ -235,10 +236,10 @@ async def assign_certificate_to_location(
         ).first()
         if prev_location:
             prev_location.current_count -= 1
-    
+
     location.current_count += 1
     db.commit()
-    
+
     # Create history record
     history = StorageLocationHistory(
         certificate_id=assignment.certificate_id,
@@ -250,10 +251,10 @@ async def assign_certificate_to_location(
     )
     db.add(history)
     db.commit()
-    
+
     await log_audit(db, current_user.id, "CERTIFICATE_ASSIGNED_TO_STORAGE", "storage",
                     f"Assigned certificate {certificate.certificate_number} to {location.code}")
-    
+
     return {
         "message": f"Certificate {certificate.certificate_number} assigned to {location.name}",
         "location": location.name,
@@ -264,34 +265,34 @@ async def assign_certificate_to_location(
 async def get_certificate_storage_history(
     certificate_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_permission(Permission.REGISTRY_VIEW_INVENTORY))
 ):
     """Get storage history for a certificate"""
-    
+
     history = db.query(StorageLocationHistory).filter(
         StorageLocationHistory.certificate_id == certificate_id
     ).order_by(StorageLocationHistory.created_at.desc()).all()
-    
+
     return history
 
 @router.get("/locations/{location_id}/certificates")
 async def get_certificates_in_location(
     location_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_permission(Permission.REGISTRY_VIEW_INVENTORY))
 ):
     """Get all certificates in a storage location"""
-    
+
     location = db.query(StorageLocation).filter(
         StorageLocation.id == location_id
     ).first()
     if not location:
         raise HTTPException(status_code=404, detail="Storage location not found")
-    
+
     certificates = db.query(RegistryInventory).filter(
         RegistryInventory.storage_location_id == location_id
     ).all()
-    
+
     return {
         "location": location.name,
         "location_code": location.code,
