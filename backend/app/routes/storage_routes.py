@@ -8,7 +8,7 @@ from ..models.models import (
     User, StorageLocation, RegistryInventory, StorageLocationHistory
 )
 from ..auth.auth import get_current_active_user
-from ..core.permissions import require_permission, Permission, require_role
+from ..core.permissions import require_permission, Permission
 from ..utils.audit import log_audit
 
 router = APIRouter(prefix="/storage", tags=["Storage"])
@@ -82,7 +82,7 @@ class StorageHistoryResponse(BaseModel):
 async def create_storage_location(
     location: StorageLocationCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission(Permission.ADMIN_MANAGE_INVENTORY))
+    current_user: User = Depends(require_permission(Permission.STORAGE_CREATE_LOCATION))
 ):
     """Create a new storage location"""
 
@@ -112,7 +112,7 @@ async def get_storage_locations(
     limit: int = 100,
     is_active: Optional[bool] = True,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission(Permission.REGISTRY_VIEW_INVENTORY))
+    current_user: User = Depends(require_permission(Permission.STORAGE_VIEW))
 ):
     """Get all storage locations"""
 
@@ -126,7 +126,7 @@ async def get_storage_locations(
 async def get_storage_location(
     location_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission(Permission.REGISTRY_VIEW_INVENTORY))
+    current_user: User = Depends(require_permission(Permission.STORAGE_VIEW))
 ):
     """Get a specific storage location"""
 
@@ -142,7 +142,7 @@ async def update_storage_location(
     location_id: int,
     location_update: StorageLocationUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission(Permission.ADMIN_MANAGE_INVENTORY))
+    current_user: User = Depends(require_permission(Permission.STORAGE_UPDATE_LOCATION))
 ):
     """Update a storage location"""
 
@@ -167,7 +167,7 @@ async def update_storage_location(
 async def delete_storage_location(
     location_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission(Permission.ADMIN_MANAGE_INVENTORY))
+    current_user: User = Depends(require_permission(Permission.STORAGE_DELETE_LOCATION))
 ):
     """Delete a storage location (only if no certificates assigned)"""
 
@@ -200,7 +200,7 @@ async def delete_storage_location(
 async def assign_certificate_to_location(
     assignment: StorageAssignment,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission(Permission.ADMIN_MANAGE_INVENTORY))
+    current_user: User = Depends(require_permission(Permission.STORAGE_ASSIGN_CERTIFICATE))
 ):
     """Assign a certificate to a storage location"""
 
@@ -265,7 +265,7 @@ async def assign_certificate_to_location(
 async def get_certificate_storage_history(
     certificate_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission(Permission.REGISTRY_VIEW_INVENTORY))
+    current_user: User = Depends(require_permission(Permission.STORAGE_VIEW))
 ):
     """Get storage history for a certificate"""
 
@@ -279,7 +279,7 @@ async def get_certificate_storage_history(
 async def get_certificates_in_location(
     location_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission(Permission.REGISTRY_VIEW_INVENTORY))
+    current_user: User = Depends(require_permission(Permission.STORAGE_VIEW))
 ):
     """Get all certificates in a storage location"""
 

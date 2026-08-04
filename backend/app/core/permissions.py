@@ -1,72 +1,148 @@
 """
 Role-Based Access Control (RBAC) - Permission Definitions
+Enhanced for University Digital Certificate Ecosystem
 """
+import logging
 from enum import Enum
-from typing import List, Optional
+from typing import List
 from fastapi import HTTPException, status, Depends
 from sqlalchemy.orm import Session
-from ..models.models import User, UserRole
-from ..auth.auth import get_current_active_user
 
-# ============= PERMISSION DEFINITIONS =============
+from ..models.models import User, UserRole, Student
+from ..auth.auth import get_current_active_user
+from ..core.database import get_db
+
+logger = logging.getLogger(__name__)
+
+# ============= 1. PERMISSION DEFINITIONS (THE KEYS) =============
 
 class Permission(str, Enum):
-    # Student Permissions
-    STUDENT_VIEW_PROFILE = "student:view_profile"
+    # ===== STUDENT PERMISSIONS =====
+    STUDENT_VIEW_CERTIFICATE_STATUS = "student:view_certificate_status"
+    STUDENT_VIEW_COLLECTION_STATUS = "student:view_collection_status"
+    STUDENT_VIEW_CLEARANCE_PROGRESS = "student:view_clearance_progress"
+    STUDENT_UPDATE_CONTACT = "student:update_contact"
+    STUDENT_VIEW_APPOINTMENT = "student:view_appointment"
+    STUDENT_CANCEL_APPOINTMENT = "student:cancel_appointment"
+    STUDENT_RESCHEDULE_APPOINTMENT = "student:reschedule_appointment"
     STUDENT_APPLY_CLEARANCE = "student:apply_clearance"
-    STUDENT_VIEW_CLEARANCE = "student:view_clearance"
-    STUDENT_VIEW_NOTIFICATIONS = "student:view_notifications"
-    STUDENT_BOOK_APPOINTMENT = "student:book_appointment"
-    STUDENT_VIEW_CERTIFICATE = "student:view_certificate"
+    STUDENT_VIEW_OWN_NOTIFICATIONS = "student:view_own_notifications"
 
-    # Finance Permissions
-    FINANCE_VIEW_PENDING = "finance:view_pending"
+    # ===== FINANCE PERMISSIONS =====
+    FINANCE_VIEW_DASHBOARD = "finance:view_dashboard"
     FINANCE_SEARCH_STUDENTS = "finance:search_students"
-    FINANCE_VIEW_CLEARANCE = "finance:view_clearance"
+    FINANCE_VIEW_PENDING = "finance:view_pending"
+    FINANCE_VIEW_HISTORY = "finance:view_history"
+    FINANCE_VIEW_REPORTS = "finance:view_reports"
     FINANCE_APPROVE = "finance:approve"
     FINANCE_REJECT = "finance:reject"
+    FINANCE_RETURN_FOR_REVIEW = "finance:return_for_review"
     FINANCE_ADD_COMMENTS = "finance:add_comments"
-    FINANCE_VIEW_REPORTS = "finance:view_reports"
+    FINANCE_EXPORT_REPORTS = "finance:export_reports"
+    FINANCE_CREATE_NOTIFICATION = "finance:create_notification"
 
-    # Examination Permissions
+    # ===== EXAMINATION PERMISSIONS =====
+    EXAM_VIEW_DASHBOARD = "exam:view_dashboard"
     EXAM_VIEW_PENDING = "exam:view_pending"
     EXAM_VERIFY_ACADEMIC = "exam:verify_academic"
     EXAM_APPROVE = "exam:approve"
     EXAM_REJECT = "exam:reject"
+    EXAM_RETURN_FOR_REVIEW = "exam:return_for_review"
     EXAM_ADD_REMARKS = "exam:add_remarks"
     EXAM_VIEW_REPORTS = "exam:view_reports"
+    EXAM_EXPORT_REPORTS = "exam:export_reports"
+    EXAM_CREATE_NOTIFICATION = "exam:create_notification"
 
-    # Registry Permissions - ALL of them
-    REGISTRY_VIEW_CLEARED = "registry:view_cleared"
+    # ===== DEAN PERMISSIONS (NEW!) =====
+    DEAN_VIEW_DASHBOARD = "dean:view_dashboard"
+    DEAN_VIEW_PENDING = "dean:view_pending"
+    DEAN_APPROVE = "dean:approve"
+    DEAN_REJECT = "dean:reject"
+    DEAN_ADD_REMARKS = "dean:add_remarks"
+    DEAN_VIEW_REPORTS = "dean:view_reports"
+
+    # ===== REGISTRY PERMISSIONS =====
+    REGISTRY_VIEW_DASHBOARD = "registry:view_dashboard"
+    REGISTRY_SEARCH_CLEARED = "registry:search_cleared"
     REGISTRY_SEARCH_INVENTORY = "registry:search_inventory"
-    REGISTRY_VIEW_INVENTORY = "registry:view_inventory"  # <-- ADDED MISSING
-    REGISTRY_MARK_AVAILABLE = "registry:mark_available"
-    REGISTRY_SCHEDULE_APPOINTMENT = "registry:schedule_appointment"
-    REGISTRY_VERIFY_IDENTITY = "registry:verify_identity"
-    REGISTRY_RECORD_COLLECTION = "registry:record_collection"
-    REGISTRY_VIEW_REPORTS = "registry:view_reports"
-    REGISTRY_MANAGE_REPLACEMENT = "registry:manage_replacement"
+    REGISTRY_VIEW_INVENTORY = "registry:view_inventory"
     REGISTRY_ADD_INVENTORY = "registry:add_inventory"
     REGISTRY_UPDATE_INVENTORY = "registry:update_inventory"
-    REGISTRY_DELETE_INVENTORY = "registry:delete_inventory"
+    REGISTRY_ARCHIVE_INVENTORY = "registry:archive_inventory"
+    REGISTRY_REMOVE_INVENTORY = "registry:remove_inventory"
+    REGISTRY_ASSIGN_STORAGE = "registry:assign_storage"
+    REGISTRY_UPDATE_STORAGE = "registry:update_storage"
+    REGISTRY_MARK_AVAILABLE = "registry:mark_available"
+    REGISTRY_MARK_ON_HOLD = "registry:mark_on_hold"
+    REGISTRY_SCHEDULE_COLLECTION = "registry:schedule_collection"
+    REGISTRY_VERIFY_IDENTITY = "registry:verify_identity"
+    REGISTRY_VERIFY_COLLECTION = "registry:verify_collection"
+    REGISTRY_RECORD_COLLECTION = "registry:record_collection"
+    REGISTRY_CANCEL_COLLECTION = "registry:cancel_collection"
+    REGISTRY_MANAGE_REPLACEMENT = "registry:manage_replacement"
+    REGISTRY_VIEW_REPORTS = "registry:view_reports"
+    REGISTRY_EXPORT_REPORTS = "registry:export_reports"
+    REGISTRY_CREATE_NOTIFICATION = "registry:create_notification"
 
-    # Storage Permissions
-    STORAGE_CREATE = "storage:create"
-    STORAGE_UPDATE = "storage:update"
-    STORAGE_DELETE = "storage:delete"
+    # ===== STORAGE PERMISSIONS =====
+    STORAGE_CREATE_LOCATION = "storage:create_location"
+    STORAGE_UPDATE_LOCATION = "storage:update_location"
+    STORAGE_DELETE_LOCATION = "storage:delete_location"
     STORAGE_VIEW = "storage:view"
-    STORAGE_ASSIGN = "storage:assign"
+    STORAGE_ASSIGN_CERTIFICATE = "storage:assign_certificate"
+    STORAGE_TRANSFER_CERTIFICATE = "storage:transfer_certificate"
+    STORAGE_AUDIT = "storage:audit"
 
-    # Auditor Permissions
+    # ===== AUDITOR PERMISSIONS (Read-Only) =====
     AUDITOR_VIEW_LOGS = "auditor:view_logs"
-    AUDITOR_VIEW_ACTIVITY = "auditor:view_activity"
     AUDITOR_VIEW_LOGIN_HISTORY = "auditor:view_login_history"
+    AUDITOR_VIEW_ACTIVITY = "auditor:view_activity"
     AUDITOR_VIEW_CLEARANCE_HISTORY = "auditor:view_clearance_history"
     AUDITOR_VIEW_COLLECTION_HISTORY = "auditor:view_collection_history"
-    AUDITOR_GENERATE_REPORTS = "auditor:generate_reports"
+    AUDITOR_VIEW_REPORTS = "auditor:view_reports"
     AUDITOR_EXPORT_REPORTS = "auditor:export_reports"
+    AUDITOR_SEARCH_LOGS = "auditor:search_logs"
 
-    # Admin Permissions - ALL of them
+    # ===== NOTIFICATION PERMISSIONS =====
+    NOTIFICATION_CREATE = "notification:create"
+    NOTIFICATION_UPDATE = "notification:update"
+    NOTIFICATION_DELETE = "notification:delete"
+    NOTIFICATION_SEND = "notification:send"
+    NOTIFICATION_VIEW_ALL = "notification:view_all"
+    NOTIFICATION_BROADCAST = "notification:broadcast"
+    NOTIFICATION_MANAGE_SETTINGS = "notification:manage_settings"
+
+    # ===== SEARCH PERMISSIONS =====
+    SEARCH_STUDENTS = "search:students"
+    SEARCH_REGISTRY_INVENTORY = "search:registry_inventory"
+    SEARCH_AUDIT_LOGS = "search:audit_logs"
+    SEARCH_COLLECTIONS = "search:collections"
+    SEARCH_CLEARANCE_REQUESTS = "search:clearance_requests"
+    SEARCH_USERS = "search:users"
+
+    # ===== USER MANAGEMENT PERMISSIONS =====
+    USER_CREATE = "user:create"
+    USER_VIEW = "user:view"
+    USER_UPDATE = "user:update"
+    USER_DELETE = "user:delete"
+    USER_ACTIVATE = "user:activate"
+    USER_DEACTIVATE = "user:deactivate"
+    USER_RESET_PASSWORD = "user:reset_password"
+    USER_ASSIGN_ROLE = "user:assign_role"
+    USER_REMOVE_ROLE = "user:remove_role"
+    USER_LOCK = "user:lock"
+    USER_UNLOCK = "user:unlock"
+
+    # ===== DASHBOARD PERMISSIONS =====
+    DASHBOARD_VIEW_STUDENT = "dashboard:view_student"
+    DASHBOARD_VIEW_FINANCE = "dashboard:view_finance"
+    DASHBOARD_VIEW_EXAMINATION = "dashboard:view_examination"
+    DASHBOARD_VIEW_DEAN = "dashboard:view_dean"
+    DASHBOARD_VIEW_REGISTRY = "dashboard:view_registry"
+    DASHBOARD_VIEW_AUDITOR = "dashboard:view_auditor"
+    DASHBOARD_VIEW_ADMIN = "dashboard:view_admin"
+
+    # ===== LEGACY ADMIN PERMISSIONS =====
     ADMIN_MANAGE_USERS = "admin:manage_users"
     ADMIN_MANAGE_ROLES = "admin:manage_roles"
     ADMIN_MANAGE_DEPARTMENTS = "admin:manage_departments"
@@ -79,160 +155,133 @@ class Permission(str, Enum):
     ADMIN_RESET_PASSWORDS = "admin:reset_passwords"
     ADMIN_VIEW_AUDIT = "admin:view_audit"
 
-# ============= ROLE TO PERMISSIONS MAPPING =============
+# ============= 2. ROLE TO PERMISSIONS MAPPING (THE KEYCHAINS) =============
 
 ROLE_PERMISSIONS = {
     UserRole.STUDENT: [
-        Permission.STUDENT_VIEW_PROFILE,
-        Permission.STUDENT_APPLY_CLEARANCE,
-        Permission.STUDENT_VIEW_CLEARANCE,
-        Permission.STUDENT_VIEW_NOTIFICATIONS,
-        Permission.STUDENT_BOOK_APPOINTMENT,
-        Permission.STUDENT_VIEW_CERTIFICATE,
+        Permission.STUDENT_VIEW_CERTIFICATE_STATUS, Permission.STUDENT_VIEW_COLLECTION_STATUS,
+        Permission.STUDENT_VIEW_CLEARANCE_PROGRESS, Permission.STUDENT_UPDATE_CONTACT,
+        Permission.STUDENT_VIEW_APPOINTMENT, Permission.STUDENT_CANCEL_APPOINTMENT,
+        Permission.STUDENT_RESCHEDULE_APPOINTMENT, Permission.STUDENT_APPLY_CLEARANCE,
+        Permission.STUDENT_VIEW_OWN_NOTIFICATIONS, Permission.DASHBOARD_VIEW_STUDENT,
     ],
-
+    
     UserRole.FINANCE: [
-        Permission.FINANCE_VIEW_PENDING,
-        Permission.FINANCE_SEARCH_STUDENTS,
-        Permission.FINANCE_VIEW_CLEARANCE,
-        Permission.FINANCE_APPROVE,
-        Permission.FINANCE_REJECT,
-        Permission.FINANCE_ADD_COMMENTS,
-        Permission.FINANCE_VIEW_REPORTS,
+        Permission.FINANCE_VIEW_DASHBOARD, Permission.FINANCE_SEARCH_STUDENTS,
+        Permission.FINANCE_VIEW_PENDING, Permission.FINANCE_VIEW_HISTORY,
+        Permission.FINANCE_VIEW_REPORTS, Permission.FINANCE_APPROVE,
+        Permission.FINANCE_REJECT, Permission.FINANCE_RETURN_FOR_REVIEW,
+        Permission.FINANCE_ADD_COMMENTS, Permission.FINANCE_EXPORT_REPORTS,
+        Permission.FINANCE_CREATE_NOTIFICATION, Permission.SEARCH_STUDENTS,
+        Permission.DASHBOARD_VIEW_FINANCE,
     ],
-
+    
     UserRole.EXAMINATION_OFFICE: [
-        Permission.EXAM_VIEW_PENDING,
-        Permission.EXAM_VERIFY_ACADEMIC,
-        Permission.EXAM_APPROVE,
-        Permission.EXAM_REJECT,
-        Permission.EXAM_ADD_REMARKS,
-        Permission.EXAM_VIEW_REPORTS,
+        Permission.EXAM_VIEW_DASHBOARD, Permission.EXAM_VIEW_PENDING,
+        Permission.EXAM_VERIFY_ACADEMIC, Permission.EXAM_APPROVE,
+        Permission.EXAM_REJECT, Permission.EXAM_RETURN_FOR_REVIEW,
+        Permission.EXAM_ADD_REMARKS, Permission.EXAM_VIEW_REPORTS,
+        Permission.EXAM_EXPORT_REPORTS, Permission.EXAM_CREATE_NOTIFICATION,
+        Permission.SEARCH_STUDENTS, Permission.DASHBOARD_VIEW_EXAMINATION,
     ],
 
+    # NEW: DEAN ROLE
+    UserRole.DEAN: [
+        Permission.DEAN_VIEW_DASHBOARD, Permission.DEAN_VIEW_PENDING,
+        Permission.DEAN_APPROVE, Permission.DEAN_REJECT,
+        Permission.DEAN_ADD_REMARKS, Permission.DEAN_VIEW_REPORTS,
+        Permission.SEARCH_STUDENTS, Permission.DASHBOARD_VIEW_DEAN,
+    ],
+    
     UserRole.REGISTRY_OFFICER: [
-        Permission.REGISTRY_VIEW_CLEARED,
-        Permission.REGISTRY_SEARCH_INVENTORY,
-        Permission.REGISTRY_VIEW_INVENTORY,
-        Permission.REGISTRY_MARK_AVAILABLE,
-        Permission.REGISTRY_SCHEDULE_APPOINTMENT,
-        Permission.REGISTRY_VERIFY_IDENTITY,
-        Permission.REGISTRY_RECORD_COLLECTION,
-        Permission.REGISTRY_VIEW_REPORTS,
-        Permission.REGISTRY_MANAGE_REPLACEMENT,
-        Permission.REGISTRY_ADD_INVENTORY,
-        Permission.REGISTRY_UPDATE_INVENTORY,
-        Permission.REGISTRY_DELETE_INVENTORY,
-        Permission.STORAGE_VIEW,
-        Permission.STORAGE_ASSIGN,
+        Permission.REGISTRY_VIEW_DASHBOARD, Permission.REGISTRY_SEARCH_CLEARED,
+        Permission.REGISTRY_SEARCH_INVENTORY, Permission.REGISTRY_VIEW_INVENTORY,
+        Permission.REGISTRY_ADD_INVENTORY, Permission.REGISTRY_UPDATE_INVENTORY,
+        Permission.REGISTRY_ARCHIVE_INVENTORY, Permission.REGISTRY_REMOVE_INVENTORY,
+        Permission.REGISTRY_ASSIGN_STORAGE, Permission.REGISTRY_UPDATE_STORAGE,
+        Permission.REGISTRY_MARK_AVAILABLE, Permission.REGISTRY_MARK_ON_HOLD,
+        Permission.REGISTRY_SCHEDULE_COLLECTION, Permission.REGISTRY_VERIFY_IDENTITY,
+        Permission.REGISTRY_VERIFY_COLLECTION, Permission.REGISTRY_RECORD_COLLECTION,
+        Permission.REGISTRY_CANCEL_COLLECTION, Permission.REGISTRY_MANAGE_REPLACEMENT,
+        Permission.REGISTRY_VIEW_REPORTS, Permission.REGISTRY_EXPORT_REPORTS,
+        Permission.REGISTRY_CREATE_NOTIFICATION, Permission.STORAGE_CREATE_LOCATION,
+        Permission.STORAGE_UPDATE_LOCATION, Permission.STORAGE_VIEW,
+        Permission.STORAGE_ASSIGN_CERTIFICATE, Permission.STORAGE_TRANSFER_CERTIFICATE,
+        Permission.SEARCH_STUDENTS, Permission.SEARCH_REGISTRY_INVENTORY,
+        Permission.SEARCH_COLLECTIONS, Permission.DASHBOARD_VIEW_REGISTRY,
     ],
-
+    
     UserRole.INTERNAL_AUDITOR: [
-        Permission.AUDITOR_VIEW_LOGS,
-        Permission.AUDITOR_VIEW_ACTIVITY,
-        Permission.AUDITOR_VIEW_LOGIN_HISTORY,
-        Permission.AUDITOR_VIEW_CLEARANCE_HISTORY,
-        Permission.AUDITOR_VIEW_COLLECTION_HISTORY,
-        Permission.AUDITOR_GENERATE_REPORTS,
-        Permission.AUDITOR_EXPORT_REPORTS,
-    ],
-
-    UserRole.SUPER_ADMIN: [
-        # Admin gets ALL permissions
-        *[p for p in Permission],
+        Permission.AUDITOR_VIEW_LOGS, Permission.AUDITOR_VIEW_LOGIN_HISTORY,
+        Permission.AUDITOR_VIEW_ACTIVITY, Permission.AUDITOR_VIEW_CLEARANCE_HISTORY,
+        Permission.AUDITOR_VIEW_COLLECTION_HISTORY, Permission.AUDITOR_VIEW_REPORTS,
+        Permission.AUDITOR_EXPORT_REPORTS, Permission.AUDITOR_SEARCH_LOGS,
+        Permission.SEARCH_AUDIT_LOGS, Permission.SEARCH_COLLECTIONS,
+        Permission.SEARCH_CLEARANCE_REQUESTS, Permission.DASHBOARD_VIEW_AUDITOR,
     ],
 }
 
-# ============= PERMISSION CHECK FUNCTIONS =============
+# ============= 3. PERMISSION CHECK FUNCTIONS =============
 
 def has_permission(user: User, permission: Permission) -> bool:
-    """Check if a user has a specific permission"""
-    if not user or not user.is_active:
-        return False
-
-    if user.role == UserRole.SUPER_ADMIN:
-        return True
-
+    if not user: return False
+    if not user.is_active: return False
+    if user.role == UserRole.SUPER_ADMIN: return True
     user_permissions = ROLE_PERMISSIONS.get(user.role, [])
     return permission in user_permissions
 
 def has_any_permission(user: User, permissions: List[Permission]) -> bool:
-    """Check if a user has any of the specified permissions"""
     return any(has_permission(user, p) for p in permissions)
 
 def has_all_permissions(user: User, permissions: List[Permission]) -> bool:
-    """Check if a user has all of the specified permissions"""
     return all(has_permission(user, p) for p in permissions)
 
-# ============= FASTAPI DEPENDENCIES =============
+def get_user_permissions(user: User) -> List[str]:
+    if not user: return []
+    if user.role == UserRole.SUPER_ADMIN:
+        return [p.value for p in Permission]
+    return [p.value for p in ROLE_PERMISSIONS.get(user.role, [])]
+
+# ============= 4. FASTAPI DEPENDENCIES (THE SECURITY GUARDS) =============
 
 def require_permission(permission: Permission):
-    """Dependency to require a specific permission"""
-    def permission_checker(
-        current_user: User = Depends(get_current_active_user)
-    ):
+    def permission_checker(current_user: User = Depends(get_current_active_user)):
         if not has_permission(current_user, permission):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Access Denied. Required permission: {permission.value}"
-            )
+            logger.warning(f"Authorization Failed: User {current_user.username} attempted to access {permission.value}")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Access Denied. Required permission: {permission.value}")
         return current_user
     return permission_checker
 
 def require_any_permission(permissions: List[Permission]):
-    """Dependency to require any of the specified permissions"""
-    def permission_checker(
-        current_user: User = Depends(get_current_active_user)
-    ):
+    def permission_checker(current_user: User = Depends(get_current_active_user)):
         if not has_any_permission(current_user, permissions):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Access Denied. Required one of: {[p.value for p in permissions]}"
-            )
+            logger.warning(f"Authorization Failed: User {current_user.username} lacked required permissions.")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access Denied. You do not have the required permissions.")
         return current_user
     return permission_checker
 
 def require_role(roles: List[UserRole]):
-    """Dependency to require a specific role"""
-    def role_checker(
-        current_user: User = Depends(get_current_active_user)
-    ):
+    def role_checker(current_user: User = Depends(get_current_active_user)):
         if current_user.role not in roles:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Access Denied. Required roles: {[r.value for r in roles]}"
-            )
+             logger.warning(f"Authorization Failed: User {current_user.username} attempted to access role-restricted endpoint.")
+             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access Denied. Invalid role.")
         return current_user
     return role_checker
 
-def require_student_ownership(student_id: int):
-    """Check if the student is accessing their own record"""
+def require_student_ownership():
     def ownership_checker(
-        db: Session = None,
+        student_id: int,
+        db: Session = Depends(get_db),
         current_user: User = Depends(get_current_active_user)
     ):
-        from ..models.models import Student
-
-        if current_user.role == UserRole.SUPER_ADMIN:
-            return current_user
-
+        if current_user.role == UserRole.SUPER_ADMIN: return current_user
         if current_user.role != UserRole.STUDENT:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access Denied. Only students can access student records."
-            )
-
-        # Check if this student belongs to this user
-        student = db.query(Student).filter(
-            Student.id == student_id,
-            Student.user_id == current_user.id
-        ).first()
-
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access Denied. Only students can access student records.")
+        if db is None:
+             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database session error.")
+        student = db.query(Student).filter(Student.id == student_id, Student.user_id == current_user.id).first()
         if not student:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Access Denied. You can only access your own records."
-            )
-
+            logger.warning(f"Ownership Violation: Student User {current_user.id} attempted to access Student Record {student_id}")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access Denied. You can only access your own records.")
         return current_user
     return ownership_checker

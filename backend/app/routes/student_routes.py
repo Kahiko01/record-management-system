@@ -1,189 +1,111 @@
-from ..core.permissions import require_permission, Permission, require_role
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List, Optional
-from ..core.database import get_db
-from ..models.models import (
-    User, Student, ClearanceRequest, FinanceClearance, 
-    ExaminationClearance, RegistryInventory
-)
-from ..schemas.schemas import StudentCreate, StudentUpdate, StudentResponse
-from ..auth.auth import get_current_active_user, role_required
-from ..utils.audit import log_audit
+from typing import List
 
+# 1. IMPORT OUR SECURITY TOOLS
+from app.core.permissions import require_permission, Permission, require_student_ownership
+from app.core.database import get_db
+from app.auth.auth import get_current_active_user
+
+# 2. FIXED IMPORTS: Removed 'Appointment' because it doesn't exist in the database models yet
+from app.models.models import User, Student, ClearanceRequest, Notification
+from app.schemas.schemas import StudentResponse
+
+# Setup the router with the correct prefix so the frontend can find it
 router = APIRouter(prefix="/students", tags=["Students"])
 
-@router.post("/", response_model=StudentResponse)
-async def create_student(
-    student: StudentCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(role_required(["super_admin", "registry_officer", "academic_office"]))
+# ==================== STUDENT ROUTES ====================
+
+# 1. View Own Profile
+@router.get("/me", response_model=StudentResponse)
+async def get_my_profile(
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
 ):
-    # Check if student_id exists
-    existing = db.query(Student).filter(Student.student_id == student.student_id).first()
+    """
+    Student: View Profile
+    Security: Users can ONLY see their own profile.
+    """
+    student = db.query(Student).filter(Student.user_id == current_user.id).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student profile not found")
+    return student
+
+# 2. Apply for Clearance
+@router.post("/request-clearance")
+async def request_clearance(
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Student: Apply for Clearance
+    Security: Only students can apply. Checks if request already exists.
+    """
+    if current_user.role != "student":
+        raise HTTPException(status_code=403, detail="Access Denied. Only students can apply.")
+        
+    student = db.query(Student).filter(Student.user_id == current_user.id).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student profile not found")
+
+    # Check for existing pending requests
+    existing = db.query(ClearanceRequest).filter(
+        ClearanceRequest.student_id == student.id,
+        ClearanceRequest.overall_status.in_(["pending", "in_progress"])
+    ).first()
+
     if existing:
-        raise HTTPException(status_code=400, detail="Student ID already exists")
+        raise HTTPException(status_code=400, detail="You already have a pending clearance request.")
 
-    # Check if user exists
-    user = db.query(User).filter(User.id == student.user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    db_student = Student(**student.model_dump())
-    db.add(db_student)
-    db.commit()
-    db.refresh(db_student)
-
-    # Create clearance request record
-    clearance_request = ClearanceRequest(
-        student_id=db_student.id,
-        student_user_id=student.user_id,
+    # Create new request
+    new_request = ClearanceRequest(
+        student_id=student.id,
+        student_user_id=current_user.id,
         overall_status="pending"
     )
-    db.add(clearance_request)
+    db.add(new_request)
     db.commit()
-    db.refresh(clearance_request)
+    db.refresh(new_request)
+    
+    return {"message": "Clearance request submitted!", "id": new_request.id}
 
-    # Create finance clearance record
-    finance = FinanceClearance(
-        clearance_request_id=clearance_request.id,
-        status="pending"
-    )
-    db.add(finance)
-
-    # Create examination clearance record
-    examination = ExaminationClearance(
-        clearance_request_id=clearance_request.id,
-        status="pending"
-    )
-    db.add(examination)
-    db.commit()
-
-    await log_audit(db, current_user.id, "STUDENT_CREATED", "student", f"Created student: {student.student_id}")
-
-    return db_student
-
-@router.get("/", response_model=List[StudentResponse])
-async def get_students(
-    skip: int = 0,
-    limit: int = 100,
-    search: Optional[str] = None,
-    adm_no: Optional[str] = None,
-    student_name: Optional[str] = None,
-    course: Optional[str] = None,
-    certificate_no: Optional[str] = None,
-    level_from: Optional[int] = None,
-    level_to: Optional[int] = None,
-    year: Optional[str] = None,
-    program: Optional[str] = None,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+# 3. View Clearance Status
+@router.get("/clearance-status")
+async def view_clearance_status(
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
 ):
-    """Get students with advanced search filters"""
-    query = db.query(Student)
-    
-    # Search by ADM No (student_id)
-    if adm_no:
-        query = query.filter(Student.student_id.contains(adm_no))
-    
-    # Search by student name
-    if student_name:
-        query = query.filter(
-            (Student.first_name.contains(student_name)) |
-            (Student.last_name.contains(student_name)) |
-            (Student.middle_name.contains(student_name))
-        )
-    
-    # Search by course/program
-    if course or program:
-        search_program = course or program
-        query = query.filter(Student.program.contains(search_program))
-    
-    # Search by certificate number (from RegistryInventory)
-    if certificate_no:
-        query = query.join(RegistryInventory).filter(
-            RegistryInventory.certificate_number.contains(certificate_no)
-        )
-    
-    # Filter by level (year_of_study)
-    if level_from is not None:
-        query = query.filter(Student.year_of_study >= level_from)
-    if level_to is not None:
-        query = query.filter(Student.year_of_study <= level_to)
-    
-    # Search by year (enrollment or graduation year)
-    # Note: If enrollment_date/graduation_date are Date/DateTime objects, 
-    # you may need to cast them to String depending on your DB (e.g., cast(Student.enrollment_date, String).contains(year))
-    if year:
-        query = query.filter(
-            (Student.enrollment_date.contains(year)) |
-            (Student.graduation_date.contains(year))
-        )
-    
-    # General search (legacy)
-    if search:
-        query = query.filter(
-            (Student.first_name.contains(search)) |
-            (Student.last_name.contains(search)) |
-            (Student.student_id.contains(search)) |
-            (Student.email.contains(search)) |
-            (Student.program.contains(search))
-        )
-    
-    return query.offset(skip).limit(limit).all()
-
-@router.get("/{student_id}", response_model=StudentResponse)
-async def get_student(
-    student_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    student = db.query(Student).filter(Student.id == student_id).first()
+    """
+    Student: View Clearance Progress
+    """
+    student = db.query(Student).filter(Student.user_id == current_user.id).first()
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
-    return student
+        
+    request = db.query(ClearanceRequest).filter(
+        ClearanceRequest.student_id == student.id
+    ).order_by(ClearanceRequest.created_at.desc()).first()
+    
+    if not request:
+        return {"status": "No active request found"}
+        
+    return {
+        "request_id": request.id,
+        "overall_status": request.overall_status
+    }
 
-@router.put("/{student_id}", response_model=StudentResponse)
-async def update_student(
-    student_id: int,
-    student_update: StudentUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(role_required(["super_admin", "registry_officer", "academic_office"]))
+# 4. View Notifications
+@router.get("/notifications")
+async def view_notifications(
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
 ):
-    student = db.query(Student).filter(Student.id == student_id).first()
-    if not student:
-        raise HTTPException(status_code=404, detail="Student not found")
-
-    for key, value in student_update.model_dump(exclude_unset=True).items():
-        setattr(student, key, value)
-
-    db.commit()
-    db.refresh(student)
-
-    await log_audit(db, current_user.id, "STUDENT_UPDATED", "student", f"Updated student: {student.student_id}")
-
-    return student
-
-@router.delete("/{student_id}")
-async def delete_student(
-    student_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(role_required(["super_admin"]))
-):
-    student = db.query(Student).filter(Student.id == student_id).first()
-    if not student:
-        raise HTTPException(status_code=404, detail="Student not found")
-
-    # Delete associated clearance records
-    clearance = db.query(ClearanceRequest).filter(ClearanceRequest.student_id == student_id).first()
-    if clearance:
-        db.query(FinanceClearance).filter(FinanceClearance.clearance_request_id == clearance.id).delete()
-        db.query(ExaminationClearance).filter(ExaminationClearance.clearance_request_id == clearance.id).delete()
-        db.delete(clearance)
-
-    db.delete(student)
-    db.commit()
-
-    await log_audit(db, current_user.id, "STUDENT_DELETED", "student", f"Deleted student: {student.student_id}")
-
-    return {"message": "Student deleted successfully"}
+    """
+    Student: View Notifications
+    Security: Only view notifications meant for this user.
+    """
+    notifications = db.query(Notification).filter(
+        Notification.recipient_id == current_user.id
+    ).order_by(Notification.created_at.desc()).all()
+    
+    return notifications
