@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 from ..core.database import get_db
@@ -215,6 +216,83 @@ async def update_dean_clearance(
     db.add(notification); db.commit()
     return {"message": f"Dean clearance updated to {status_str}", "clearance_id": clearance_id}
 
+
+# ========================================
+# FINANCE PAYMENT BULK UPLOAD
+# ========================================
+
+class PaymentImportItem(BaseModel):
+    student_id: str
+    amount_due: float
+    amount_paid: float
+
+@router.post("/finance/bulk-payments")
+async def bulk_upload_payments(
+    payments_data: List[PaymentImportItem],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission(Permission.FINANCE_VIEW_PENDING))
+):
+    """Bulk upload payment data from Excel. Updates or creates FinanceClearance records."""
+    updated_count = 0
+    created_count = 0
+    errors = []
+
+    for item in payments_data:
+        try:
+            # Find student by ADM No
+            student = db.query(Student).filter(Student.student_id == item.student_id).first()
+            if not student:
+                errors.append(f"Student {item.student_id} not found")
+                continue
+
+            # Find or create ClearanceRequest
+            clearance = db.query(ClearanceRequest).filter(ClearanceRequest.student_id == student.id).first()
+            if not clearance:
+                clearance = ClearanceRequest(
+                    student_id=student.id,
+                    student_user_id=student.user_id,
+                    overall_status="pending"
+                )
+                db.add(clearance)
+                db.commit()
+                db.refresh(clearance)
+
+            # Find or create FinanceClearance
+            finance = db.query(FinanceClearance).filter(FinanceClearance.clearance_request_id == clearance.id).first()
+            
+            outstanding = item.amount_due - item.amount_paid
+            
+            if finance:
+                finance.amount_due = item.amount_due
+                finance.amount_paid = item.amount_paid
+                finance.outstanding_balance = outstanding
+                updated_count += 1
+            else:
+                new_finance = FinanceClearance(
+                    clearance_request_id=clearance.id,
+                    status=ClearanceStatus.PENDING,
+                    amount_due=item.amount_due,
+                    amount_paid=item.amount_paid,
+                    outstanding_balance=outstanding
+                )
+                db.add(new_finance)
+                created_count += 1
+            
+            db.commit()
+
+        except Exception as e:
+            errors.append(f"Row {item.student_id}: {str(e)}")
+
+    await log_audit(db, current_user.id, "PAYMENTS_BULK_UPLOADED", "finance",
+                    f"Uploaded payments: {updated_count} updated, {created_count} created")
+
+    return {
+        "message": "Payment upload completed",
+        "updated": updated_count,
+        "created": created_count,
+        "errors": errors
+    }
+
 # ========================================
 # 4. FEE BALANCE ENDPOINTS (NEW!)
 # ========================================
@@ -400,3 +478,37 @@ async def get_clearance_stats(
         examination_queue=db.query(ExaminationClearance).filter(ExaminationClearance.status == ClearanceStatus.PENDING).count(),
         registry_queue=db.query(RegistryInventory).filter(RegistryInventory.status == CertificateStatus.READY_FOR_COLLECTION).count()
     )
+
+# ========================================
+# COLLECTIONS & REPORTING ENDPOINT
+# ========================================
+
+@router.get("/registry/collections-report")
+async def get_collections_report(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_any_permission([Permission.REGISTRY_VIEW_REPORTS, Permission.ADMIN_VIEW_ALL_REPORTS, Permission.AUDITOR_VIEW_REPORTS]))
+):
+    """Generates a comprehensive flat report of all certificates, locations, and collections"""
+    results = db.query(RegistryInventory).all()
+    report = []
+    
+    for cert in results:
+        student = db.query(Student).filter(Student.id == cert.student_id).first()
+        location = db.query(StorageLocation).filter(StorageLocation.id == cert.storage_location_id).first() if cert.storage_location_id else None
+        collection = db.query(CertificateCollection).filter(CertificateCollection.certificate_id == cert.id).first()
+        officer = db.query(User).filter(User.id == collection.registry_officer_id).first() if collection else None
+        
+        report.append({
+            "certificate_number": cert.certificate_number,
+            "student_name": f"{student.first_name} {student.last_name}" if student else "Unknown",
+            "student_id": student.student_id if student else "N/A",
+            "program": cert.programme,
+            "status": cert.status.value if hasattr(cert.status, 'value') else str(cert.status),
+            "storage_location": location.name if location else (cert.storage_location or "Unassigned"),
+            "building": location.building if location else "",
+            "room": location.room if location else "",
+            "shelf": location.shelf if location else "",
+            "collection_date": collection.collection_date.strftime("%Y-%m-%d %H:%M") if collection and collection.collection_date else "",
+            "collected_by": officer.full_name if officer else ""
+        })
+    return report
