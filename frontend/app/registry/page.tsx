@@ -1,345 +1,199 @@
 "use client";
 
-import { useState, useEffect, Fragment } from "react";
+import { registryApi, clearanceApi } from "../lib/api";
+import { useState, useEffect } from "react";
+import TopBar from "../components/TopBar";
+import Sidebar from "../components/Sidebar";
 import { useAuth, Permission } from "../context/AuthContext";
-import { clearanceApi, registryApi, studentApi, collectionApi, storageApi } from "../lib/api";
-import { ClearanceRequest, RegistryInventory, CertificateStatus, Student } from "../types";
-import { Award, CheckCircle, Search, RefreshCw, ChevronDown, FileText, Users, Upload, Download, AlertTriangle, X } from "lucide-react";
-import * as XLSX from "xlsx";
+import { Package, Search, RefreshCw, CheckCircle, Clock, Archive, MapPin } from "lucide-react";
 
 export default function RegistryPage() {
-  const { user, hasPermission } = useAuth();
-  const [students, setStudents] = useState<Student[]>([]);
-  const [certificates, setCertificates] = useState<RegistryInventory[]>([]);
-  const [filteredCertificates, setFilteredCertificates] = useState<RegistryInventory[]>([]);
-  const [clearedStudents, setClearedStudents] = useState<ClearanceRequest[]>([]);
+  const { hasPermission } = useAuth();
+  const [inventory, setInventory] = useState<any[]>([]);
+  const [clearedStudents, setClearedStudents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
-  const [viewMode, setViewMode] = useState<'students' | 'cleared' | 'inventory'>('students');
+  const [activeTab, setActiveTab] = useState<'inventory' | 'cleared'>('inventory');
+  const [filters, setFilters] = useState({ search: "", status: "" });
 
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadResult, setUploadResult] = useState<any>(null);
-
-  const [selectedCertificate, setSelectedCertificate] = useState<RegistryInventory | null>(null);
-  const [showMarkReadyModal, setShowMarkReadyModal] = useState(false);
-  const [showCollectModal, setShowCollectModal] = useState(false);
-  const [readyCheck, setReadyCheck] = useState({ certificate_available: false, condition_verified: false, clearance_confirmed: false, storage_assigned: false });
-  const [collectCheck, setCollectCheck] = useState({ id_presented: false, identity_verified: false, signature_received: false, certificate_handed_over: false });
-
-  const [filters, setFilters] = useState({ student_name: "", status: "" });
-  const [studentSearch, setStudentSearch] = useState("");
-
-  useEffect(() => { fetchData(); }, [viewMode]);
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const studentsRes = await studentApi.getAll({ limit: 1000 });
-      const certsRes = await registryApi.getCertificates();
-      setStudents(studentsRes.data || []);
-      setCertificates(certsRes.data || []);
-      applyFilters(certsRes.data || [], studentsRes.data || []);
-      if (viewMode === 'cleared') {
-        const clearedRes = await clearanceApi.getClearedStudents();
-        setClearedStudents(clearedRes.data || []);
-      }
-    } catch (error) { console.error("Failed to fetch data:", error); } 
-    finally { setLoading(false); }
-  };
-
-  const applyFilters = (certs: RegistryInventory[], studentsData: Student[]) => {
-    let filtered = [...certs];
-    if (filters.status) filtered = filtered.filter(c => c.status === filters.status);
-    if (filters.student_name) {
-      const matchingStudents = studentsData.filter(s => s.first_name.toLowerCase().includes(filters.student_name.toLowerCase()) || s.last_name.toLowerCase().includes(filters.student_name.toLowerCase()));
-      const studentIds = new Set(matchingStudents.map(s => s.id));
-      filtered = filtered.filter(c => studentIds.has(c.student_id));
+      const [inventoryRes, clearedRes] = await Promise.all([
+        registryApi.getCertificates({ search: filters.search, status: filters.status }),
+        clearanceApi.getClearedStudents(),
+      ]);
+      setInventory(inventoryRes.data || []);
+      setClearedStudents(clearedRes.data || []);
+    } catch (error) {
+      console.error("Failed to fetch registry data:", error);
+    } finally {
+      setLoading(false);
     }
-    setFilteredCertificates(filtered);
   };
 
-  const handleMarkReady = async () => {
-    if (!selectedCertificate) return;
+  const handleMarkReady = async (studentId: number) => {
     try {
-      await registryApi.markReady(selectedCertificate.id);
-      setShowMarkReadyModal(false); setSelectedCertificate(null);
-      setReadyCheck({ certificate_available: false, condition_verified: false, clearance_confirmed: false, storage_assigned: false });
+      await registryApi.markReady(studentId);
       fetchData();
-    } catch (error: any) { alert(error.response?.data?.detail || "Failed to mark ready"); }
-  };
-
-  const handleRecordCollection = async () => {
-    if (!selectedCertificate) return;
-    try {
-      await collectionApi.collect({ certificate_id: selectedCertificate.id, student_id: selectedCertificate.student_id, collection_method: "in_person" });
-      setShowCollectModal(false); setSelectedCertificate(null);
-      setCollectCheck({ id_presented: false, identity_verified: false, signature_received: false, certificate_handed_over: false });
-      fetchData();
-    } catch (error: any) { alert(error.response?.data?.detail || "Failed to record collection"); }
-  };
-
-  const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setIsUploading(true);
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      try {
-        const data = new Uint8Array(event.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: 'array' });
-        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-        const json = XLSX.utils.sheet_to_json(worksheet);
-        const importData = json.map((row: any) => ({
-          identifier: String(row['Identifier'] || row['identifier'] || ""),
-          series: String(row['Series'] || row['series'] || ""),
-          year: String(row['Year'] || row['year'] || ""),
-          student_name: String(row['Student Name'] || row['student_name'] || ""),
-          course: String(row['Course'] || row['course'] || ""),
-          certificate_no: String(row['Certificate No'] || row['certificate_no'] || "")
-        })).filter(item => item.certificate_no !== "");
-        if (importData.length === 0) { alert("No valid data found."); setIsUploading(false); return; }
-        const res = await storageApi.bulkImportCertificates(importData);
-        setUploadResult(res.data);
-        fetchData();
-      } catch (error) { console.error("Upload failed:", error); alert("Failed to import."); } 
-      finally { setIsUploading(false); e.target.value = ""; }
-    };
-    reader.readAsArrayBuffer(file);
-  };
-
-  const downloadTemplate = () => {
-    const template = [{ "Identifier": "REG", "Series": "A", "Year": "2024", "Student Name": "John Doe", "Course": "Computer Science", "Certificate No": "CERT-2024-001" }];
-    const ws = XLSX.utils.json_to_sheet(template);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Certificates");
-    XLSX.writeFile(wb, "Registry_Certificate_Template.xlsx");
-  };
-
-  const getCertificateForStudent = (studentId: number) => certificates.find(c => c.student_id === studentId);
-  const filteredStudents = students.filter(s => {
-    if (!studentSearch) return true;
-    const search = studentSearch.toLowerCase();
-    return s.first_name.toLowerCase().includes(search) || s.last_name.toLowerCase().includes(search) || s.student_id.toLowerCase().includes(search) || s.program.toLowerCase().includes(search);
-  });
-
-  const getStatusColor = (status: CertificateStatus) => {
-    switch (status) {
-      case "awaiting_clearance": return "bg-yellow-500";
-      case "ready_for_collection": return "bg-green-500";
-      case "on_hold": return "bg-red-500";
-      case "collected": return "bg-blue-500";
-      default: return "bg-gray-500";
+    } catch (error) {
+      console.error("Failed to mark certificate ready:", error);
+      alert("Failed to mark certificate ready.");
     }
   };
 
-  const getStatusLabel = (status: CertificateStatus) => {
+  const getStatusBadge = (status: string) => {
     switch (status) {
-      case "awaiting_clearance": return "⏳ Awaiting";
-      case "ready_for_collection": return "✅ Ready";
-      case "on_hold": return "🔴 On Hold";
-      case "collected": return "📦 Collected";
-      default: return status;
+      case "collected":
+        return <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30">✅ Collected</span>;
+      case "ready":
+        return <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400 border border-blue-200 dark:border-blue-500/30">📦 Ready</span>;
+      case "in_storage":
+        return <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400 border border-amber-200 dark:border-amber-500/30">🗄️ In Storage</span>;
+      default:
+        return <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-gray-100 text-gray-700 dark:bg-slate-500/20 dark:text-slate-400 border border-gray-200 dark:border-slate-500/30">Unknown</span>;
     }
   };
 
-  const toggleRow = (id: number) => {
-    const newExpanded = new Set(expandedRows);
-    if (newExpanded.has(id)) newExpanded.delete(id); else newExpanded.add(id);
-    setExpandedRows(newExpanded);
-  };
-
-  const readyAllChecked = Object.values(readyCheck).every(v => v === true);
-  const collectAllChecked = Object.values(collectCheck).every(v => v === true);
-
-  if (loading) return <div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-500 mx-auto"></div></div>;
+  if (loading) return <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-slate-950"><div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 dark:border-slate-800 border-t-emerald-500"></div></div>;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">🏛️ Registry Office</h1>
-            <p className="text-sm text-gray-500">Manage students, certificates, and collections</p>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <button onClick={downloadTemplate} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 text-sm"><Download className="h-4 w-4" /> Template</button>
-            <label className={`flex items-center gap-2 px-4 py-2 ${isUploading ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'} text-white rounded-lg cursor-pointer text-sm`}>
-              <Upload className="h-4 w-4" /> {isUploading ? "Uploading..." : "Upload Excel"}
-              <input type="file" accept=".xlsx, .xls" onChange={handleExcelUpload} className="hidden" disabled={isUploading} />
-            </label>
-            <button onClick={fetchData} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"><RefreshCw className="h-4 w-4" /></button>
-          </div>
-        </div>
-
-        {uploadResult && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2"><CheckCircle className="h-5 w-5 text-blue-600" /><p className="text-blue-800 font-medium">Import Complete: {uploadResult.created} created, {uploadResult.skipped} skipped.</p></div>
-              <button onClick={() => setUploadResult(null)} className="text-blue-400 hover:text-blue-600"><X className="h-4 w-4" /></button>
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 text-gray-900 dark:text-slate-200">
+      <TopBar />
+      <div className="flex">
+        <Sidebar />
+        <div className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8 gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">📦 Registry Office</h1>
+              <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">Manage certificate inventory and student collections</p>
             </div>
-            {uploadResult.errors?.length > 0 && (
-              <div className="mt-2 text-sm text-red-600">
-                <p className="font-bold flex items-center gap-1"><AlertTriangle className="h-4 w-4" /> Errors:</p>
-                <ul className="list-disc list-inside max-h-20 overflow-y-auto">{uploadResult.errors.map((err: string, i: number) => <li key={i}>{err}</li>)}</ul>
-              </div>
-            )}
+            <button onClick={fetchData} className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl text-sm transition-colors shadow-lg shadow-emerald-900/20">
+              <RefreshCw className="h-4 w-4" /> Refresh
+            </button>
           </div>
-        )}
 
-        <div className="flex bg-gray-200 rounded-lg p-1 mb-6 w-fit flex-wrap">
-          <button onClick={() => setViewMode('students')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${viewMode === 'students' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><Users className="h-4 w-4" /> All Students ({students.length})</button>
-          <button onClick={() => setViewMode('cleared')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${viewMode === 'cleared' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><CheckCircle className="h-4 w-4" /> Cleared Students ({clearedStudents.length})</button>
-          <button onClick={() => setViewMode('inventory')} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${viewMode === 'inventory' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}><Award className="h-4 w-4" /> Certificates ({certificates.length})</button>
-        </div>
+          {/* Tabs */}
+          <div className="flex bg-gray-100 dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl p-1 mb-6">
+            <button onClick={() => setActiveTab('inventory')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'inventory' ? 'bg-white dark:bg-slate-800 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white'}`}>
+              <Archive className="h-4 w-4" /> Certificate Inventory
+            </button>
+            <button onClick={() => setActiveTab('cleared')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'cleared' ? 'bg-white dark:bg-slate-800 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white'}`}>
+              <CheckCircle className="h-4 w-4" /> Cleared Students
+            </button>
+          </div>
 
-        {viewMode === 'students' && (
-          <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
-            <div className="p-4 border-b">
-              <div className="relative flex-1 max-w-md">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <input type="text" placeholder="Search students..." value={studentSearch} onChange={(e) => setStudentSearch(e.target.value)} className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          {/* Search Bar */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 p-5 mb-6 shadow-sm">
+            <div className="flex flex-col md:flex-row gap-4 items-end">
+              <div className="flex-1">
+                <label className="block text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Search Name / Certificate No</label>
+                <input type="text" value={filters.search} onChange={(e) => setFilters({ ...filters, search: e.target.value })} onKeyPress={(e) => e.key === "Enter" && fetchData()} placeholder="e.g. John or CERT/2024/001" className="w-full px-4 py-2.5 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50" />
               </div>
+              <div className="w-40">
+                <label className="block text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Status</label>
+                <select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })} className="w-full px-3 py-2.5 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50">
+                  <option value="">All Status</option>
+                  <option value="ready">Ready</option>
+                  <option value="collected">Collected</option>
+                  <option value="in_storage">In Storage</option>
+                </select>
+              </div>
+              <button onClick={fetchData} className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl text-sm transition-colors shadow-lg shadow-emerald-900/20">Search</button>
+              <button onClick={() => { setFilters({ search: "", status: "" }); setTimeout(fetchData, 100); }} className="px-4 py-2.5 text-sm font-medium text-rose-500 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl transition-colors">Clear</button>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b"><tr><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">#</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Student</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Program</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Certificate Status</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th></tr></thead>
-                <tbody className="divide-y">
-                  {filteredStudents.length === 0 ? <tr><td colSpan={5} className="px-6 py-12 text-center text-gray-500">No students found</td></tr> : (
-                    filteredStudents.map((student, index) => {
-                      const cert = getCertificateForStudent(student.id);
-                      return (
-                        <tr key={student.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 text-sm text-gray-500">{index + 1}</td>
-                          <td className="px-6 py-4 text-sm">{student.first_name} {student.last_name}<br /><span className="text-xs text-gray-500">{student.student_id}</span></td>
-                          <td className="px-6 py-4 text-sm text-gray-700">{student.program}</td>
-                          <td className="px-6 py-4">{cert ? <span className={`px-2 py-1 text-xs text-white rounded-full ${getStatusColor(cert.status)}`}>{getStatusLabel(cert.status)}</span> : <span className="px-2 py-1 text-xs text-white rounded-full bg-gray-400">No Certificate</span>}</td>
-                          <td className="px-6 py-4">
-                            {cert && cert.status === "awaiting_clearance" && hasPermission(Permission.REGISTRY_MARK_AVAILABLE) && <button onClick={() => { setSelectedCertificate(cert); setShowMarkReadyModal(true); }} className="px-3 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700">✅ Mark Ready</button>}
-                            {cert && cert.status === "ready_for_collection" && hasPermission(Permission.REGISTRY_RECORD_COLLECTION) && <button onClick={() => { setSelectedCertificate(cert); setShowCollectModal(true); }} className="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700">📦 Collect</button>}
-                            {cert && cert.status === "collected" && <span className="text-xs text-blue-600 font-medium">📦 Collected</span>}
-                            {!cert && <span className="text-xs text-gray-400 italic">Upload via Excel</span>}
+          </div>
+
+          {/* Inventory Table */}
+          {activeTab === 'inventory' && (
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-800">
+                    <tr>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Certificate No</th>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Student</th>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Program</th>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Storage Location</th>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 dark:divide-slate-800">
+                    {inventory.length === 0 ? (
+                      <tr><td colSpan={5} className="px-6 py-16 text-center text-gray-500 dark:text-slate-500"><Package className="h-12 w-12 text-emerald-500/30 mx-auto mb-3" /><p className="font-medium">No certificates found</p></td></tr>
+                    ) : (
+                      inventory.map((cert: any) => (
+                        <tr key={cert.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/30 transition-colors">
+                          <td className="px-6 py-4 text-sm">
+                            <p className="font-semibold text-gray-900 dark:text-white">{cert.certificate_number}</p>
+                            <p className="text-xs text-gray-500 dark:text-slate-500">Series: {cert.series}</p>
                           </td>
+                          <td className="px-6 py-4 text-sm">
+                            <p className="text-gray-700 dark:text-slate-300">{cert.student_name}</p>
+                            <p className="text-xs text-gray-500 dark:text-slate-500">{cert.student_id}</p>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-700 dark:text-slate-300">{cert.course}</td>
+                          <td className="px-6 py-4 text-sm">
+                            <p className="text-gray-700 dark:text-slate-300 flex items-center gap-1"><MapPin className="h-3 w-3" /> {cert.storage_location?.building || "N/A"}</p>
+                            <p className="text-xs text-gray-500 dark:text-slate-500">Room: {cert.storage_location?.room || "N/A"}, Shelf: {cert.storage_location?.shelf || "N/A"}</p>
+                          </td>
+                          <td className="px-6 py-4">{getStatusBadge(cert.status)}</td>
                         </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {viewMode === 'cleared' && (
-          <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
-            <div className="p-4 border-b bg-green-50"><h2 className="text-lg font-semibold text-gray-900">Students Cleared by Finance & Examinations</h2></div>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b"><tr><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Student</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Program</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Certificate Status</th><th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th></tr></thead>
-                <tbody className="divide-y">
-                  {clearedStudents.length === 0 ? <tr><td colSpan={4} className="px-6 py-12 text-center text-gray-500"><CheckCircle className="h-12 w-12 text-green-300 mx-auto mb-2" />No cleared students</td></tr> : (
-                    clearedStudents.map((request) => {
-                      const student = students.find(s => s.id === request.student_id);
-                      const cert = getCertificateForStudent(request.student_id);
-                      return (
-                        <tr key={request.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 text-sm">{student ? `${student.first_name} ${student.last_name}` : 'Unknown'}<br /><span className="text-xs text-gray-500">{student?.student_id || 'N/A'}</span></td>
-                          <td className="px-6 py-4 text-sm text-gray-700">{student?.program || 'N/A'}</td>
-                          <td className="px-6 py-4">{cert ? <span className={`px-2 py-1 text-xs text-white rounded-full ${getStatusColor(cert.status)}`}>{getStatusLabel(cert.status)}</span> : <span className="px-2 py-1 text-xs text-white rounded-full bg-gray-400">No Certificate</span>}</td>
+          {/* Cleared Students Table */}
+          {activeTab === 'cleared' && (
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-800">
+                    <tr>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Student</th>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Program</th>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Clearance Date</th>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Certificate Status</th>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 dark:divide-slate-800">
+                    {clearedStudents.length === 0 ? (
+                      <tr><td colSpan={5} className="px-6 py-16 text-center text-gray-500 dark:text-slate-500"><CheckCircle className="h-12 w-12 text-emerald-500/30 mx-auto mb-3" /><p className="font-medium">No cleared students found</p></td></tr>
+                    ) : (
+                      clearedStudents.map((student: any) => (
+                        <tr key={student.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/30 transition-colors">
+                          <td className="px-6 py-4 text-sm">
+                            <p className="font-semibold text-gray-900 dark:text-white">{student.first_name} {student.last_name}</p>
+                            <p className="text-xs text-gray-500 dark:text-slate-500">{student.student_id}</p>
+                          </td>
+                          <td className="px-6 py-4 text-sm">
+                            <p className="text-gray-700 dark:text-slate-300">{student.program}</p>
+                            <p className="text-xs text-gray-500 dark:text-slate-500">Year {student.year_of_study}</p>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-700 dark:text-slate-300">{new Date(student.clearance_date).toLocaleDateString()}</td>
+                          <td className="px-6 py-4">{getStatusBadge(student.certificate_status || "in_storage")}</td>
                           <td className="px-6 py-4">
-                            {hasPermission(Permission.REGISTRY_MARK_AVAILABLE) && (
-                              <>
-                                {!cert && <span className="text-xs text-gray-400 italic">Upload via Excel</span>}
-                                {cert && cert.status === "awaiting_clearance" && <button onClick={() => { setSelectedCertificate(cert); setShowMarkReadyModal(true); }} className="px-3 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700">✅ Mark Ready</button>}
-                                {cert && cert.status === "ready_for_collection" && <span className="text-xs text-green-600 font-medium">✅ Ready</span>}
-                                {cert && cert.status === "collected" && <span className="text-xs text-blue-600 font-medium">📦 Collected</span>}
-                              </>
+                            {hasPermission(Permission.REGISTRY_MANAGE) && student.certificate_status !== "collected" && (
+                              <button onClick={() => handleMarkReady(student.id)} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-colors">Mark Ready</button>
                             )}
                           </td>
                         </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {viewMode === 'inventory' && (
-          <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b"><tr><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Certificate</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Student</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Course</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th></tr></thead>
-                <tbody className="divide-y">
-                  {certificates.length === 0 ? <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-500">No certificates found</td></tr> : (
-                    certificates.map((cert) => {
-                      const student = students.find(s => s.id === cert.student_id);
-                      const isExpanded = expandedRows.has(cert.id);
-                      return (
-                        <Fragment key={cert.id}>
-                          <tr className="hover:bg-gray-50">
-                            <td className="px-4 py-3 text-sm font-medium text-gray-900"><div className="flex items-center gap-2"><FileText className="h-4 w-4 text-gray-400" />{cert.certificate_number}</div></td>
-                            <td className="px-4 py-3 text-sm">{student ? `${student.first_name} ${student.last_name}` : 'N/A'}</td>
-                            <td className="px-4 py-3 text-sm text-gray-600">{cert.programme}</td>
-                            <td className="px-4 py-3"><span className={`px-2 py-1 text-xs text-white rounded-full ${getStatusColor(cert.status)}`}>{getStatusLabel(cert.status)}</span></td>
-                            <td className="px-4 py-3">
-                              <div className="flex items-center gap-2">
-                                {cert.status === "awaiting_clearance" && hasPermission(Permission.REGISTRY_MARK_AVAILABLE) && <button onClick={() => { setSelectedCertificate(cert); setShowMarkReadyModal(true); }} className="px-2 py-1 bg-green-600 text-white rounded text-xs hover:bg-green-700">Mark Ready</button>}
-                                {cert.status === "ready_for_collection" && hasPermission(Permission.REGISTRY_RECORD_COLLECTION) && <button onClick={() => { setSelectedCertificate(cert); setShowCollectModal(true); }} className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700">Collect</button>}
-                                <button onClick={() => toggleRow(cert.id)} className="p-1 text-blue-600 hover:bg-blue-50 rounded"><ChevronDown className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} /></button>
-                              </div>
-                            </td>
-                          </tr>
-                          {isExpanded && (
-                            <tr><td colSpan={5} className="px-4 py-4 bg-gray-50"><div className="grid grid-cols-2 md:grid-cols-4 gap-4"><div><p className="text-xs text-gray-500">Certificate Number</p><p className="text-sm font-medium">{cert.certificate_number}</p></div><div><p className="text-xs text-gray-500">Programme</p><p className="text-sm">{cert.programme}</p></div><div><p className="text-xs text-gray-500">Storage Location</p><p className="text-sm">{cert.storage_location || 'Not set'}</p></div><div><p className="text-xs text-gray-500">Status</p><p className="text-sm">{getStatusLabel(cert.status)}</p></div></div></td></tr>
-                          )}
-                        </Fragment>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {showMarkReadyModal && selectedCertificate && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 max-w-md w-full">
-              <h2 className="text-xl font-bold mb-4">✅ Mark Ready for Collection</h2>
-              <p className="text-sm text-gray-600 mb-4">Certificate: <span className="font-bold">{selectedCertificate.certificate_number}</span></p>
-              <div className="mb-4 space-y-3 bg-green-50 p-3 rounded-lg border border-green-200">
-                <label className="flex items-center gap-2"><input type="checkbox" checked={readyCheck.certificate_available} onChange={(e) => setReadyCheck({ ...readyCheck, certificate_available: e.target.checked })} className="rounded" /><span className="text-sm">Certificate physically available</span></label>
-                <label className="flex items-center gap-2"><input type="checkbox" checked={readyCheck.condition_verified} onChange={(e) => setReadyCheck({ ...readyCheck, condition_verified: e.target.checked })} className="rounded" /><span className="text-sm">Certificate condition verified</span></label>
-                <label className="flex items-center gap-2"><input type="checkbox" checked={readyCheck.clearance_confirmed} onChange={(e) => setReadyCheck({ ...readyCheck, clearance_confirmed: e.target.checked })} className="rounded" /><span className="text-sm">Student fully cleared</span></label>
-                <label className="flex items-center gap-2"><input type="checkbox" checked={readyCheck.storage_assigned} onChange={(e) => setReadyCheck({ ...readyCheck, storage_assigned: e.target.checked })} className="rounded" /><span className="text-sm">Storage location assigned</span></label>
-              </div>
-              <div className="flex gap-3">
-                <button onClick={handleMarkReady} disabled={!readyAllChecked} className="flex-1 py-2 px-4 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50">Confirm Mark Ready</button>
-                <button onClick={() => { setShowMarkReadyModal(false); setSelectedCertificate(null); setReadyCheck({ certificate_available: false, condition_verified: false, clearance_confirmed: false, storage_assigned: false }); }} className="flex-1 py-2 px-4 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">Cancel</button>
+                      ))
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
-          </div>
-        )}
-
-        {showCollectModal && selectedCertificate && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 max-w-md w-full">
-              <h2 className="text-xl font-bold mb-4">📦 Record Certificate Collection</h2>
-              <p className="text-sm text-gray-600 mb-4">Certificate: <span className="font-bold">{selectedCertificate.certificate_number}</span></p>
-              <div className="mb-4 space-y-3 bg-blue-50 p-3 rounded-lg border border-blue-200">
-                <label className="flex items-center gap-2"><input type="checkbox" checked={collectCheck.id_presented} onChange={(e) => setCollectCheck({ ...collectCheck, id_presented: e.target.checked })} className="rounded" /><span className="text-sm">Student presented valid ID</span></label>
-                <label className="flex items-center gap-2"><input type="checkbox" checked={collectCheck.identity_verified} onChange={(e) => setCollectCheck({ ...collectCheck, identity_verified: e.target.checked })} className="rounded" /><span className="text-sm">Identity verified</span></label>
-                <label className="flex items-center gap-2"><input type="checkbox" checked={collectCheck.signature_received} onChange={(e) => setCollectCheck({ ...collectCheck, signature_received: e.target.checked })} className="rounded" /><span className="text-sm">Student signed acknowledgement</span></label>
-                <label className="flex items-center gap-2"><input type="checkbox" checked={collectCheck.certificate_handed_over} onChange={(e) => setCollectCheck({ ...collectCheck, certificate_handed_over: e.target.checked })} className="rounded" /><span className="text-sm">Certificate handed over</span></label>
-              </div>
-              <div className="flex gap-3">
-                <button onClick={handleRecordCollection} disabled={!collectAllChecked} className="flex-1 py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">Confirm Collection</button>
-                <button onClick={() => { setShowCollectModal(false); setSelectedCertificate(null); setCollectCheck({ id_presented: false, identity_verified: false, signature_received: false, certificate_handed_over: false }); }} className="flex-1 py-2 px-4 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">Cancel</button>
-              </div>
-            </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

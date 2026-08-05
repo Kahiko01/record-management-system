@@ -259,9 +259,9 @@ async def bulk_upload_payments(
 
             # Find or create FinanceClearance
             finance = db.query(FinanceClearance).filter(FinanceClearance.clearance_request_id == clearance.id).first()
-            
+
             outstanding = item.amount_due - item.amount_paid
-            
+
             if finance:
                 finance.amount_due = item.amount_due
                 finance.amount_paid = item.amount_paid
@@ -277,7 +277,7 @@ async def bulk_upload_payments(
                 )
                 db.add(new_finance)
                 created_count += 1
-            
+
             db.commit()
 
         except Exception as e:
@@ -491,13 +491,13 @@ async def get_collections_report(
     """Generates a comprehensive flat report of all certificates, locations, and collections"""
     results = db.query(RegistryInventory).all()
     report = []
-    
+
     for cert in results:
         student = db.query(Student).filter(Student.id == cert.student_id).first()
         location = db.query(StorageLocation).filter(StorageLocation.id == cert.storage_location_id).first() if cert.storage_location_id else None
         collection = db.query(CertificateCollection).filter(CertificateCollection.certificate_id == cert.id).first()
         officer = db.query(User).filter(User.id == collection.registry_officer_id).first() if collection else None
-        
+
         report.append({
             "certificate_number": cert.certificate_number,
             "student_name": f"{student.first_name} {student.last_name}" if student else "Unknown",
@@ -512,3 +512,109 @@ async def get_collections_report(
             "collected_by": officer.full_name if officer else ""
         })
     return report
+
+# ========================================
+# NOTIFICATIONS ENDPOINTS
+# ========================================
+
+@router.get("/notifications")
+async def get_my_notifications(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    # Find the student profile linked to the logged-in user
+    student = db.query(Student).filter(Student.user_id == current_user.id).first()
+    if not student:
+        return [] # Return empty list if user is not a student (e.g., Admin)
+
+    # Fetch all notifications for this student, newest first
+    notifications = db.query(Notification).filter(
+        Notification.student_id == student.id
+    ).order_by(Notification.created_at.desc()).all()
+
+    # Format the data so the frontend can read it easily
+    result = []
+    for n in notifications:
+        result.append({
+            "id": n.id,
+            "student_id": n.student_id,
+            "type": n.notification_type.value if hasattr(n.notification_type, "value") else str(n.notification_type),
+            "title": n.title,
+            "message": n.message,
+            "is_read": n.is_read,
+            "created_at": n.created_at.isoformat() if n.created_at else None
+        })
+    return result
+
+@router.put("/notifications/{notification_id}")
+async def mark_notification_read(
+    notification_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    student = db.query(Student).filter(Student.user_id == current_user.id).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    # Find the specific notification and ensure it belongs to this student
+    notification = db.query(Notification).filter(
+        Notification.id == notification_id,
+        Notification.student_id == student.id
+    ).first()
+
+    if not notification:
+        raise HTTPException(status_code=404, detail="Notification not found")
+
+    # Mark it as read in the database
+    notification.is_read = True
+    db.commit()
+    return {"message": "Notification marked as read"}
+# ========================================
+# CLEARANCE OVERVIEW (FOR SYSTEM USERS)
+# ========================================
+
+@router.get("/overview")
+async def get_clearance_overview(
+    search: Optional[str] = None, course: Optional[str] = None, level: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    query = db.query(Student)
+    if search: query = query.filter((Student.first_name.ilike(f"%{search}%")) | (Student.last_name.ilike(f"%{search}%")) | (Student.student_id.ilike(f"%{search}%")))
+    if course: query = query.filter(Student.program.ilike(f"%{course}%"))
+    if level:
+        try: query = query.filter(Student.year_of_study == int(level))
+        except ValueError: pass
+    students = query.all()
+    result = []
+    for student in students:
+        clearance = db.query(ClearanceRequest).filter(ClearanceRequest.student_id == student.id).first()
+        
+        finance_status = "no_request"
+        exam_status = "no_request"
+        dean_status = "no_request"
+        overall_status = "no_request"
+        
+        if clearance:
+            overall_status = clearance.overall_status or "pending"
+            finance = db.query(FinanceClearance).filter(FinanceClearance.clearance_request_id == clearance.id).first()
+            exam = db.query(ExaminationClearance).filter(ExaminationClearance.clearance_request_id == clearance.id).first()
+            dean = db.query(DeanApproval).filter(DeanApproval.clearance_request_id == clearance.id).first()
+            
+            finance_status = finance.status.value if finance and hasattr(finance.status, 'value') else (str(finance.status) if finance else "pending")
+            exam_status = exam.status.value if exam and hasattr(exam.status, 'value') else (str(exam.status) if exam else "pending")
+            dean_status = dean.status.value if dean and hasattr(dean.status, 'value') else (str(dean.status) if dean else "pending")
+            
+        result.append({
+            "id": student.id,
+            "student_id": student.student_id,
+            "first_name": student.first_name,
+            "last_name": student.last_name,
+            "program": student.program,
+            "year_of_study": student.year_of_study,
+            "finance_status": finance_status,
+            "exam_status": exam_status,
+            "dean_status": dean_status,
+            "overall_status": overall_status
+        })
+    return result

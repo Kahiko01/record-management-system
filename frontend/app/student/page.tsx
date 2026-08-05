@@ -1,55 +1,38 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import TopBar from "../components/TopBar";
+import Sidebar from "../components/Sidebar";
 import { useAuth } from "../context/AuthContext";
-import { clearanceApi, studentApi, notificationApi } from "../lib/api";
-import { ClearanceRequest, NotificationResponse, Student } from "../types";
-import {
-  CheckCircle,
-  XCircle,
-  Clock,
-  Bell,
-  Calendar,
-  Award,
-  CreditCard,
-  BookOpen,
-  GraduationCap,
-  User
-} from "lucide-react";
+import { clearanceApi, studentApi } from "../lib/api";
+import { CheckCircle, Clock, XCircle, GraduationCap, FileText, ArrowRight, Send } from "lucide-react";
 
-export default function StudentDashboard() {
+export default function StudentPortalPage() {
   const { user } = useAuth();
-  const [student, setStudent] = useState<Student | null>(null);
-  const [clearance, setClearance] = useState<ClearanceRequest | null>(null);
-  const [notifications, setNotifications] = useState<NotificationResponse[]>([]);
   const [loading, setLoading] = useState(true);
+  const [studentId, setStudentId] = useState<number | null>(null);
+  const [clearance, setClearance] = useState<any>(null);
+  const [applying, setApplying] = useState(false);
 
   useEffect(() => {
     fetchStudentData();
   }, []);
 
   const fetchStudentData = async () => {
+    setLoading(true);
     try {
-      // Get student profile
-      const studentRes = await studentApi.getAll({ search: user?.email || "" });
-      const studentData = studentRes.data[0];
-      setStudent(studentData);
-
-      if (studentData) {
-        // Get clearance status
+      // Find the student record linked to the logged-in user
+      const studentsRes = await studentApi.getAll({ limit: 1000 });
+      const myStudent = studentsRes.data?.find((s: any) => s.user_id === user?.id);
+      if (myStudent) {
+        setStudentId(myStudent.id);
+        // Try to fetch clearance status
         try {
-          const clearanceRes = await clearanceApi.getMyStatus();
-          setClearance(clearanceRes.data);
-        } catch (e: any) {
-          if (e.response?.status === 403) {
-            console.log("User is not a student");
-          }
-          setClearance(null);
+          const statusRes = await clearanceApi.getMyStatus();
+          setClearance(statusRes.data);
+        } catch (err) {
+          setClearance(null); // 404 means no clearance requested yet
         }
-
-        // Get notifications
-        const notifRes = await notificationApi.getMyNotifications();
-        setNotifications(notifRes.data);
       }
     } catch (error) {
       console.error("Failed to fetch student data:", error);
@@ -58,199 +41,141 @@ export default function StudentDashboard() {
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "cleared":
-        return <span className="px-2 py-1 bg-green-500 text-white text-xs rounded-full">✅ Cleared</span>;
-      case "pending":
-        return <span className="px-2 py-1 bg-yellow-500 text-white text-xs rounded-full">⏳ Pending</span>;
-      case "not_cleared":
-        return <span className="px-2 py-1 bg-red-500 text-white text-xs rounded-full">❌ Not Cleared</span>;
-      default:
-        return <span className="px-2 py-1 bg-gray-500 text-white text-xs rounded-full">{status}</span>;
+  const handleApply = async () => {
+    if (!studentId) return;
+    setApplying(true);
+    try {
+      const res = await clearanceApi.requestClearance(studentId);
+      setClearance(res.data);
+      alert("Clearance request submitted successfully!");
+    } catch (error: any) {
+      alert(error.response?.data?.detail || "Failed to submit request.");
+    } finally {
+      setApplying(false);
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "cleared":
-        return "border-green-500 bg-green-50";
-      case "pending":
-        return "border-yellow-500 bg-yellow-50";
-      case "not_cleared":
-        return "border-red-500 bg-red-50";
-      default:
-        return "border-gray-500 bg-gray-50";
-    }
+  const getStepStatus = (departmentStatus: string | undefined) => {
+    if (!departmentStatus) return "pending";
+    if (departmentStatus === "cleared") return "cleared";
+    if (departmentStatus === "not_cleared") return "rejected";
+    return "pending";
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-500 mx-auto"></div>
-      </div>
-    );
-  }
+  const StepIcon = ({ status }: { status: string }) => {
+    if (status === "cleared") return <CheckCircle className="h-8 w-8 text-emerald-500" />;
+    if (status === "rejected") return <XCircle className="h-8 w-8 text-rose-500" />;
+    return <Clock className="h-8 w-8 text-amber-500" />;
+  };
+
+  if (loading) return <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-slate-950"><div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 dark:border-slate-800 border-t-emerald-500"></div></div>;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-green-500 via-yellow-500 to-red-500 rounded-lg shadow-lg p-6 mb-8 text-white">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold">Student Dashboard</h1>
-              <p className="text-white/90">Welcome, {student?.first_name} {student?.last_name}</p>
-              <p className="text-white/80 text-sm">Student ID: {student?.student_id}</p>
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 text-gray-900 dark:text-slate-200">
+      <TopBar />
+      <div className="flex">
+        <Sidebar />
+        <div className="flex-1 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
+              <GraduationCap className="h-8 w-8 text-emerald-500" /> Student Clearance Portal
+            </h1>
+            <p className="text-gray-500 dark:text-slate-400 mt-2">Track your graduation clearance progress in real-time.</p>
+          </div>
+
+          {!clearance ? (
+            // === NO CLEARANCE REQUESTED YET ===
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 p-8 text-center shadow-lg">
+              <FileText className="h-16 w-16 text-gray-300 dark:text-slate-600 mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Ready to Graduate?</h2>
+              <p className="text-gray-500 dark:text-slate-400 mb-6 max-w-md mx-auto">
+                You haven't applied for your graduation clearance yet. Click the button below to start the process with all university departments.
+              </p>
+              <button 
+                onClick={handleApply} 
+                disabled={applying}
+                className="inline-flex items-center gap-2 px-8 py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-lg transition-colors shadow-lg shadow-emerald-900/20 disabled:opacity-50"
+              >
+                <Send className="h-5 w-5" /> {applying ? "Submitting..." : "Apply for Clearance"}
+              </button>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="bg-white/20 px-4 py-2 rounded-lg text-center">
-                <p className="text-xs text-white/80">Clearance Status</p>
-                <p className="font-bold">
-                  {clearance?.overall_status === "cleared" ? "✅ Cleared" :
-                   clearance?.overall_status === "pending" ? "⏳ Pending" :
-                   clearance?.overall_status === "rejected" ? "❌ Rejected" :
-                   "📝 Not Applied"}
+          ) : (
+            // === CLEARANCE PROGRESS TRACKER ===
+            <div className="space-y-6">
+              {/* Overall Status Banner */}
+              <div className={`p-6 rounded-2xl border shadow-sm ${
+                clearance.overall_status === 'cleared' ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800' :
+                clearance.overall_status === 'rejected' ? 'bg-rose-50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-800' :
+                'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800'
+              }`}>
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                  Overall Status: <span className="capitalize">{clearance.overall_status.replace('_', ' ')}</span>
+                </h2>
+                <p className="text-sm text-gray-600 dark:text-slate-300 mt-1">
+                  {clearance.overall_status === 'cleared' ? "Congratulations! You are cleared for graduation." :
+                   clearance.overall_status === 'rejected' ? "Your clearance was rejected by a department. Please contact the relevant office." :
+                   "Your clearance is currently being reviewed by the university departments."}
                 </p>
               </div>
-            </div>
-          </div>
-        </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left Column - Clearance Status */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Clearance Status Cards */}
-            <div className="bg-white rounded-lg shadow-sm border p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Clearance Status</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Finance Status */}
-                <div className={`border-2 rounded-lg p-4 ${getStatusColor(clearance?.finance_clearance?.status || "pending")}`}>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-gray-600">Finance</p>
-                      <p className="text-lg font-bold">
-                        {getStatusBadge(clearance?.finance_clearance?.status || "pending")}
-                      </p>
+              {/* Progress Steps */}
+              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 p-6 shadow-sm">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6">Department Approvals</h3>
+                
+                <div className="space-y-6">
+                  {/* Step 1: Finance */}
+                  <div className="flex items-start gap-4">
+                    <StepIcon status={getStepStatus(clearance.finance_clearance?.status)} />
+                    <div className="flex-1 pt-1">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-bold text-gray-900 dark:text-white">1. Finance Department</h4>
+                        <span className="text-xs font-bold uppercase text-gray-500 dark:text-slate-400">{getStepStatus(clearance.finance_clearance?.status)}</span>
+                      </div>
+                      <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">Verification of tuition and fee settlements.</p>
                     </div>
-                    <CreditCard className="h-8 w-8 text-gray-400" />
                   </div>
-                  {clearance?.finance_clearance?.remarks && (
-                    <p className="text-xs text-gray-500 mt-2">{clearance.finance_clearance.remarks}</p>
-                  )}
-                </div>
 
-                {/* Examination Status */}
-                <div className={`border-2 rounded-lg p-4 ${getStatusColor(clearance?.examination_clearance?.status || "pending")}`}>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-gray-600">Examination</p>
-                      <p className="text-lg font-bold">
-                        {getStatusBadge(clearance?.examination_clearance?.status || "pending")}
-                      </p>
+                  {/* Step 2: Exams */}
+                  <div className="flex items-start gap-4">
+                    <StepIcon status={getStepStatus(clearance.examination_clearance?.status)} />
+                    <div className="flex-1 pt-1">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-bold text-gray-900 dark:text-white">2. Examinations Office</h4>
+                        <span className="text-xs font-bold uppercase text-gray-500 dark:text-slate-400">{getStepStatus(clearance.examination_clearance?.status)}</span>
+                      </div>
+                      <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">Verification of academic records and missing grades.</p>
                     </div>
-                    <BookOpen className="h-8 w-8 text-gray-400" />
                   </div>
-                  {clearance?.examination_clearance?.remarks && (
-                    <p className="text-xs text-gray-500 mt-2">{clearance.examination_clearance.remarks}</p>
-                  )}
-                </div>
 
-                {/* Overall Status */}
-                <div className="md:col-span-2 border-2 border-gray-200 rounded-lg p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-gray-600">Overall Clearance</p>
-                      <p className="text-lg font-bold">
-                        {clearance?.overall_status === "cleared" ? (
-                          <span className="text-green-600">✅ Fully Cleared</span>
-                        ) : clearance?.overall_status === "rejected" ? (
-                          <span className="text-red-600">❌ Not Cleared</span>
-                        ) : clearance?.overall_status === "in_progress" ? (
-                          <span className="text-yellow-600">⏳ In Progress</span>
-                        ) : (
-                          <span className="text-gray-500">📝 Not Started</span>
-                        )}
-                      </p>
+                  {/* Step 3: Dean */}
+                  <div className="flex items-start gap-4">
+                    <StepIcon status={getStepStatus(clearance.dean_approval?.status)} />
+                    <div className="flex-1 pt-1">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-bold text-gray-900 dark:text-white">3. Dean's Office</h4>
+                        <span className="text-xs font-bold uppercase text-gray-500 dark:text-slate-400">{getStepStatus(clearance.dean_approval?.status)}</span>
+                      </div>
+                      <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">Final faculty approval and disciplinary check.</p>
                     </div>
-                    <Award className="h-8 w-8 text-gray-400" />
                   </div>
-                  {clearance?.collection_eligible && (
-                    <p className="text-green-600 text-sm font-medium mt-2">
-                      🎯 Eligible for certificate collection!
-                    </p>
-                  )}
                 </div>
               </div>
-            </div>
 
-            {/* Request Clearance Button */}
-            {!clearance && (
-              <div className="bg-white rounded-lg shadow-sm border p-6 text-center">
-                <p className="text-gray-600 mb-4">You haven't applied for clearance yet</p>
-                <button
-                  onClick={async () => {
-                    if (student) {
-                      try {
-                        await clearanceApi.requestClearance(student.id);
-                        fetchStudentData();
-                      } catch (error) {
-                        console.error("Failed to request clearance:", error);
-                      }
-                    }
-                  }}
-                  className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                >
-                  Apply for Clearance
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Right Column - Notifications & Actions */}
-          <div className="space-y-6">
-            {/* Notifications */}
-            <div className="bg-white rounded-lg shadow-sm border p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-gray-900">Notifications</h2>
-                <Bell className="h-5 w-5 text-gray-400" />
-              </div>
-              {notifications.length === 0 ? (
-                <p className="text-sm text-gray-500 text-center py-4">No notifications</p>
-              ) : (
-                <div className="space-y-3 max-h-64 overflow-y-auto">
-                  {notifications.map((notif) => (
-                    <div key={notif.id} className={`p-3 rounded-lg border ${notif.is_read ? 'bg-gray-50' : 'bg-blue-50 border-blue-200'}`}>
-                      <p className="text-sm font-medium text-gray-900">{notif.title}</p>
-                      <p className="text-xs text-gray-600">{notif.message}</p>
-                      <p className="text-xs text-gray-400 mt-1">
-                        {new Date(notif.created_at).toLocaleDateString()}
-                      </p>
-                    </div>
-                  ))}
+              {/* Certificate Status */}
+              {clearance.overall_status === 'cleared' && (
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-2xl p-6 shadow-sm">
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <GraduationCap className="h-5 w-5 text-blue-500" /> Certificate Collection
+                  </h3>
+                  <p className="text-sm text-gray-600 dark:text-slate-300 mt-2">
+                    {clearance.collection_eligible ? 
+                      "You are eligible to collect your certificate! Please visit the Registry office or book an appointment." : 
+                      "Your certificate is currently being processed by the Registry office. Please check back soon."}
+                  </p>
                 </div>
               )}
             </div>
-
-            {/* Quick Actions */}
-            <div className="bg-white rounded-lg shadow-sm border p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
-              <div className="space-y-2">
-                <button className="w-full flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 text-sm">
-                  <Calendar className="h-4 w-4" />
-                  Book Collection Appointment
-                </button>
-                <button className="w-full flex items-center gap-2 px-4 py-2 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 text-sm">
-                  <Award className="h-4 w-4" />
-                  View Certificates
-                </button>
-                <button className="w-full flex items-center gap-2 px-4 py-2 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 text-sm">
-                  <User className="h-4 w-4" />
-                  Update Profile
-                </button>
-              </div>
-            </div>
-          </div>
+          )}
         </div>
       </div>
     </div>

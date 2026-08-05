@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE_URL = 'http://localhost:8000';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -43,8 +43,8 @@ export const authApi = {
 
 export const studentApi = {
   getAll: (params?: any) => api.get('/students', { params }),
-  bulkImport: (data: any[]) => api.post('/students/bulk-import', data),  
-getById: (id: number) => api.get(`/students/${id}`),
+  bulkImport: (data: any[]) => api.post('/students/bulk-import', data),
+  getById: (id: number) => api.get(`/students/${id}`),
   create: (data: any) => api.post('/students', data),
   update: (id: number, data: any) => api.put(`/students/${id}`, data),
   delete: (id: number) => api.delete(`/students/${id}`),
@@ -54,14 +54,15 @@ export const clearanceApi = {
   requestClearance: (studentId: number) => api.post('/clearance/request', { student_id: studentId }),
   getMyStatus: () => api.get('/clearance/my-status'),
   getFinancePending: (params?: any) => api.get('/clearance/finance/pending', { params }),
-  uploadPayments: (data: any[]) => api.post('/clearance/finance/bulk-payments', data),  
-updateFinanceClearance: (clearanceId: number, data: any) => api.put(`/clearance/finance/${clearanceId}`, data),
+  uploadPayments: (data: any[]) => api.post('/clearance/finance/bulk-payments', data),
+  updateFinanceClearance: (clearanceId: number, data: any) => api.put(`/clearance/finance/${clearanceId}`, data),
   getExaminationPending: (params?: any) => api.get('/clearance/examination/pending', { params }),
   updateExaminationClearance: (clearanceId: number, data: any) => api.put(`/clearance/examination/${clearanceId}`, data),
   getDeanPending: (params?: any) => api.get('/clearance/dean/pending', { params }),
   updateDeanClearance: (clearanceId: number, data: any) => api.put(`/clearance/dean/${clearanceId}`, data),
   getClearedStudents: () => api.get('/clearance/registry/cleared-students'),
   getStats: () => api.get('/clearance/stats/dashboard'),
+  getOverview: (params?: any) => api.get('/clearance/overview', { params }),
 };
 
 export const registryApi = {
@@ -74,8 +75,8 @@ export const registryApi = {
 
 export const storageApi = {
   getLocations: () => api.get('/storage/locations'),
-  bulkImportCertificates: (data: any[]) => api.post('/storage/bulk-import-certificates', data),  
-getLocation: (id: number) => api.get(`/storage/locations/${id}`),
+  bulkImportCertificates: (data: any[]) => api.post('/storage/bulk-import-certificates', data),
+  getLocation: (id: number) => api.get(`/storage/locations/${id}`),
   createLocation: (data: any) => api.post('/storage/locations', data),
   updateLocation: (id: number, data: any) => api.put(`/storage/locations/${id}`, data),
   deleteLocation: (id: number) => api.delete(`/storage/locations/${id}`),
@@ -103,6 +104,7 @@ export const notificationApi = {
 export const auditApi = {
   getLogs: () => api.get('/clearance/audit/logs'),
 };
+
 // === USER MANAGEMENT API ===
 export const userApi = {
   getAll: (params?: any) => api.get('/users', { params }),
@@ -121,3 +123,14 @@ export const feeApi = {
 };
 
 export default api;
+
+// === MILITARY GRADE MONITORING API ===
+export const monitoringApi = {
+  getHealth: () => api.get('/admin/monitoring/health'),
+  getActivity: (limit?: number) => api.get('/admin/monitoring/activity', { params: { limit: limit || 50 } }),
+  getSecurity: () => api.get('/admin/monitoring/security'),
+  getActiveUsers: () => api.get('/admin/monitoring/users/active'),
+  getAuthSurveillance: () => api.get('/admin/monitoring/auth-surveillance'),
+  getDatabaseTopography: () => api.get('/admin/monitoring/database/topography'),
+  initiateLockdown: () => api.post('/admin/monitoring/lockdown'),
+};

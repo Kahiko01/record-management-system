@@ -3,194 +3,124 @@
 import { useState, useEffect } from "react";
 import TopBar from "../../components/TopBar";
 import Sidebar from "../../components/Sidebar";
-import { studentApi, feeApi, registryApi } from "../../lib/api";
-import { Download, Users, DollarSign, Package, FileSpreadsheet, CheckCircle, Loader2 } from "lucide-react";
-import * as XLSX from "xlsx";
+import { auditApi } from "../../lib/api";
+import { BarChart3, Download, RefreshCw, Calendar, FileText, Clock, Filter } from "lucide-react";
 
-export default function AuditorReportsPage() {
-  const [stats, setStats] = useState({ students: 0, finances: 0, certificates: 0 });
-  const [downloading, setDownloading] = useState<string | null>(null);
+export default function AuditReportsPage() {
+  const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dateRange, setDateRange] = useState({ start: "", end: "" });
 
-  useEffect(() => {
-    fetchCounts();
-  }, []);
+  useEffect(() => { fetchData(); }, []);
 
-  const fetchCounts = async () => {
+  const fetchData = async () => {
     setLoading(true);
     try {
-      const [studentsRes, financesRes, certsRes] = await Promise.all([
-        studentApi.getAll({ limit: 10000 }),
-        feeApi.getBalances(),
-        registryApi.getCertificates({})
-      ]);
-      setStats({
-        students: studentsRes.data?.length || 0,
-        finances: financesRes.data?.length || 0,
-        certificates: certsRes.data?.length || 0
-      });
+      const response = await auditApi.getLogs();
+      setLogs(response.data || []);
     } catch (error) {
-      console.error("Failed to fetch counts:", error);
+      console.error("Failed to fetch audit logs:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  // === DOWNLOAD FUNCTIONS ===
-  const downloadExcel = async (type: string) => {
-    setDownloading(type);
-    try {
-      let data: any[] = [];
-      let filename = "";
-      let headers: any[] = [];
+  const handleExportCSV = () => {
+    if (logs.length === 0) return alert("No data to export");
+    
+    const headers = ["Timestamp", "User", "Role", "Action", "Details"];
+    const csvContent = [
+      headers.join(","),
+      ...logs.map(log => [
+        log.timestamp ? new Date(log.timestamp).toLocaleString() : "",
+        log.user?.username || "System",
+        log.user?.role || "N/A",
+        log.action,
+        `"${(log.details || "").replace(/"/g, '""')}"` // Escape quotes
+      ].join(","))
+    ].join("\n");
 
-      if (type === "students") {
-        const res = await studentApi.getAll({ limit: 10000 });
-        data = res.data.map((s: any) => ({
-          "ADM No": s.student_id,
-          "First Name": s.first_name,
-          "Last Name": s.last_name,
-          "Email": s.email,
-          "Program": s.program,
-          "Year of Study": s.year_of_study
-        }));
-        filename = `Auditor_Student_Records_${new Date().toISOString().split('T')[0]}.xlsx`;
-      } 
-      else if (type === "finances") {
-        const res = await feeApi.getBalances();
-        data = res.data.map((f: any) => ({
-          "ADM No": f.student_number,
-          "Student Name": `${f.first_name} ${f.last_name}`,
-          "Program": f.program,
-          "Amount Due": f.amount_due,
-          "Amount Paid": f.amount_paid,
-          "Outstanding Balance": f.outstanding_balance,
-          "Finance Status": f.finance_status
-        }));
-        filename = `Auditor_Financial_Records_${new Date().toISOString().split('T')[0]}.xlsx`;
-      } 
-      else if (type === "certificates") {
-        const res = await registryApi.getCertificates({});
-        data = res.data.map((c: any) => ({
-          "Certificate No": c.certificate_number,
-          "Program": c.programme,
-          "Graduation Year": c.graduation_year,
-          "Storage Location": c.storage_location || "Unassigned",
-          "Status": c.status
-        }));
-        filename = `Auditor_Certificate_Inventory_${new Date().toISOString().split('T')[0]}.xlsx`;
-      }
-
-      const ws = XLSX.utils.json_to_sheet(data);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Report");
-      XLSX.writeFile(wb, filename);
-      
-    } catch (error) {
-      console.error("Download failed:", error);
-      alert("Failed to generate report. Please try again.");
-    } finally {
-      setDownloading(null);
-    }
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `audit_report_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
-  if (loading) {
-    return <div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div></div>;
-  }
+  const filteredLogs = logs.filter(log => {
+    if (!dateRange.start && !dateRange.end) return true;
+    const logDate = new Date(log.timestamp);
+    if (dateRange.start && logDate < new Date(dateRange.start)) return false;
+    if (dateRange.end && logDate > new Date(dateRange.end + "T23:59:59")) return false;
+    return true;
+  });
+
+  if (loading) return <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-slate-950"><div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 dark:border-slate-800 border-t-emerald-500"></div></div>;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 text-gray-900 dark:text-slate-200">
       <TopBar />
       <div className="flex">
         <Sidebar />
-        <div className="flex-1 max-w-7xl mx-auto px-4 py-8">
-          {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-              <FileSpreadsheet className="h-6 w-6 text-green-600" />
-              Auditor Export & Reports Hub
-            </h1>
-            <p className="text-sm text-gray-500 mt-1">Generate and download real-time, comprehensive Excel reports for all university records.</p>
-          </div>
-
-          {/* Info Banner */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-8 flex items-start gap-3">
-            <CheckCircle className="h-5 w-5 text-blue-600 mt-0.5" />
+        <div className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8 gap-4">
             <div>
-              <p className="text-blue-800 font-medium text-sm">Live Database Generation</p>
-              <p className="text-blue-600 text-xs mt-1">These reports are generated live from the database. They include all bulk uploads AND any manual changes made by staff, ensuring 100% audit accuracy.</p>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2"><BarChart3 className="h-6 w-6 text-emerald-500" /> Audit Reports</h1>
+              <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">Export and analyze system activity logs</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <button onClick={fetchData} className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl text-sm transition-colors"><RefreshCw className="h-4 w-4" /> Refresh</button>
+              <button onClick={handleExportCSV} className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl text-sm transition-colors"><Download className="h-4 w-4" /> Export CSV</button>
             </div>
           </div>
 
-          {/* Export Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            
-            {/* 1. Students Report */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-3 bg-indigo-100 rounded-lg"><Users className="h-6 w-6 text-indigo-600" /></div>
-                <div>
-                  <h2 className="text-lg font-bold text-gray-900">Student Records</h2>
-                  <p className="text-xs text-gray-500">ADM No, Names, Program, Year</p>
-                </div>
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 p-5 mb-6 shadow-sm">
+            <div className="flex flex-col md:flex-row gap-4 items-end">
+              <div className="flex-1">
+                <label className="block text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Start Date</label>
+                <input type="date" value={dateRange.start} onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })} className="w-full px-4 py-2.5 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50" />
               </div>
-              <div className="flex-1 mb-6">
-                <p className="text-3xl font-bold text-indigo-600">{stats.students}</p>
-                <p className="text-sm text-gray-500">Total records found</p>
+              <div className="flex-1">
+                <label className="block text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">End Date</label>
+                <input type="date" value={dateRange.end} onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })} className="w-full px-4 py-2.5 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50" />
               </div>
-              <button 
-                onClick={() => downloadExcel("students")} 
-                disabled={downloading === "students"}
-                className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium disabled:opacity-50 transition-colors"
-              >
-                {downloading === "students" ? <><Loader2 className="h-4 w-4 animate-spin" /> Generating...</> : <><Download className="h-4 w-4" /> Download Excel</>}
-              </button>
+              <button onClick={() => setDateRange({ start: "", end: "" })} className="px-4 py-2.5 text-sm font-medium text-rose-500 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl transition-colors">Clear Dates</button>
             </div>
+          </div>
 
-            {/* 2. Finances Report */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-3 bg-green-100 rounded-lg"><DollarSign className="h-6 w-6 text-green-600" /></div>
-                <div>
-                  <h2 className="text-lg font-bold text-gray-900">Financial Records</h2>
-                  <p className="text-xs text-gray-500">Fees, Payments, Balances, Status</p>
-                </div>
-              </div>
-              <div className="flex-1 mb-6">
-                <p className="text-3xl font-bold text-green-600">{stats.finances}</p>
-                <p className="text-sm text-gray-500">Total records found</p>
-              </div>
-              <button 
-                onClick={() => downloadExcel("finances")} 
-                disabled={downloading === "finances"}
-                className="w-full flex items-center justify-center gap-2 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium disabled:opacity-50 transition-colors"
-              >
-                {downloading === "finances" ? <><Loader2 className="h-4 w-4 animate-spin" /> Generating...</> : <><Download className="h-4 w-4" /> Download Excel</>}
-              </button>
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-800">
+                  <tr>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Timestamp</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">User</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Action</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Details</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 dark:divide-slate-800">
+                  {filteredLogs.length === 0 ? (
+                    <tr><td colSpan={4} className="px-6 py-16 text-center text-gray-500 dark:text-slate-500"><BarChart3 className="h-12 w-12 text-emerald-500/30 mx-auto mb-3" /><p className="font-medium">No logs found for selected dates</p></td></tr>
+                  ) : (
+                    filteredLogs.map((log) => (
+                      <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/30 transition-colors">
+                        <td className="px-6 py-4 text-sm text-gray-700 dark:text-slate-300">{new Date(log.timestamp).toLocaleString()}</td>
+                        <td className="px-6 py-4 text-sm">
+                          <p className="font-semibold text-gray-900 dark:text-white">{log.user?.username || "System"}</p>
+                          <p className="text-xs text-gray-500 dark:text-slate-500">{log.user?.role || "N/A"}</p>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-700 dark:text-slate-300">{log.action}</td>
+                        <td className="px-6 py-4 text-sm text-gray-700 dark:text-slate-300 max-w-md truncate">{log.details}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
-
-            {/* 3. Certificates Report */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-3 bg-purple-100 rounded-lg"><Package className="h-6 w-6 text-purple-600" /></div>
-                <div>
-                  <h2 className="text-lg font-bold text-gray-900">Certificate Inventory</h2>
-                  <p className="text-xs text-gray-500">Cert No, Storage, Status, Year</p>
-                </div>
-              </div>
-              <div className="flex-1 mb-6">
-                <p className="text-3xl font-bold text-purple-600">{stats.certificates}</p>
-                <p className="text-sm text-gray-500">Total records found</p>
-              </div>
-              <button 
-                onClick={() => downloadExcel("certificates")} 
-                disabled={downloading === "certificates"}
-                className="w-full flex items-center justify-center gap-2 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium disabled:opacity-50 transition-colors"
-              >
-                {downloading === "certificates" ? <><Loader2 className="h-4 w-4 animate-spin" /> Generating...</> : <><Download className="h-4 w-4" /> Download Excel</>}
-              </button>
-            </div>
-
           </div>
         </div>
       </div>

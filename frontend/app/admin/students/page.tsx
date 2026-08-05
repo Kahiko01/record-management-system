@@ -1,212 +1,156 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import TopBar from "../../components/TopBar";
 import Sidebar from "../../components/Sidebar";
+import { useAuth, Permission } from "../../context/AuthContext";
 import { studentApi } from "../../lib/api";
-import { Users, Upload, Download, Search, RefreshCw, UserPlus, X, CheckCircle, AlertTriangle } from "lucide-react";
-import * as XLSX from "xlsx";
+import { Student } from "../../types";
+import { Users, Search, Upload, RefreshCw, Trash2, Edit, X } from "lucide-react";
 
-interface Student {
-  id: number;
-  student_id: string;
-  first_name: string;
-  last_name: string;
-  email: string;
-  program: string;
-  year_of_study: number;
-}
-
-export default function StudentManagementPage() {
+export default function AdminStudentsPage() {
+  const { hasPermission } = useAuth();
   const [students, setStudents] = useState<Student[]>([]);
-  const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [importResult, setImportResult] = useState<{created: number, skipped: number, errors: string[]} | null>(null);
-  const [isImporting, setIsImporting] = useState(false);
-
-  const [formData, setFormData] = useState({
-    student_id: "", first_name: "", last_name: "", email: "", program: "", year_of_study: 1
-  });
-
-  useEffect(() => { fetchStudents(); }, []);
-
-  const fetchStudents = async () => {
-    setLoading(true);
-    try {
-      const res = await studentApi.getAll({ limit: 1000 });
-      setStudents(res.data || []);
-      setFilteredStudents(res.data || []);
-    } catch (error) { console.error(error); } 
-    finally { setLoading(false); }
-  };
+  const [filters, setFilters] = useState({ search: "", program: "", year: "" });
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [editMode, setEditMode] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    let filtered = [...students];
-    if (searchTerm) {
-      const s = searchTerm.toLowerCase();
-      filtered = filtered.filter(st => 
-        st.first_name.toLowerCase().includes(s) || st.last_name.toLowerCase().includes(s) ||
-        st.student_id.toLowerCase().includes(s) || st.program.toLowerCase().includes(s)
-      );
-    }
-    setFilteredStudents(filtered);
-  }, [searchTerm, students]);
+    fetchData();
+  }, []);
 
-  // === EXCEL IMPORT LOGIC ===
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const response = await studentApi.getAll({ ...filters, limit: 1000 });
+      setStudents(response.data || []);
+    } catch (error) {
+      console.error("Failed to fetch students:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
     if (!file) return;
 
-    setIsImporting(true);
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      try {
-        const data = new Uint8Array(event.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: 'array' });
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        const json = XLSX.utils.sheet_to_json(worksheet);
+    const formData = new FormData();
+    formData.append("file", file);
 
-        // Map Excel columns to our API format
-        const importData = json.map((row: any) => ({
-          student_id: row['ADM No'] || row['Student ID'] || row['student_id'] || "",
-          first_name: row['First Name'] || row['first_name'] || "",
-          last_name: row['Last Name'] || row['last_name'] || "",
-          email: row['Email'] || row['email'] || "",
-          program: row['Program'] || row['Course'] || row['program'] || "",
-          year_of_study: parseInt(row['Year'] || row['Level'] || row['year_of_study'] || 1)
-        })).filter(item => item.student_id !== "");
-
-        if (importData.length === 0) {
-          alert("No valid data found in the Excel file. Ensure columns match: ADM No, First Name, Last Name, Email, Program, Year");
-          setIsImporting(false);
-          return;
-        }
-
-        const res = await studentApi.bulkImport(importData);
-        setImportResult(res.data);
-        fetchStudents();
-      } catch (error) {
-        console.error("Import failed:", error);
-        alert("Failed to import file. Please check the format.");
-      } finally {
-        setIsImporting(false);
-        e.target.value = ""; // Reset input
-      }
-    };
-    reader.readAsArrayBuffer(file);
-  };
-
-  const downloadTemplate = () => {
-    const templateData = [
-      { "ADM No": "STU-001", "First Name": "John", "Last Name": "Doe", "Email": "john@student.edu", "Program": "Computer Science", "Year": 4 },
-      { "ADM No": "STU-002", "First Name": "Jane", "Last Name": "Smith", "Email": "jane@student.edu", "Program": "Business Admin", "Year": 3 }
-    ];
-    const ws = XLSX.utils.json_to_sheet(templateData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Students");
-    XLSX.writeFile(wb, "Student_Import_Template.xlsx");
-  };
-
-  const handleManualAdd = async () => {
     try {
-      await studentApi.create(formData);
-      setShowAddModal(false);
-      setFormData({ student_id: "", first_name: "", last_name: "", email: "", program: "", year_of_study: 1 });
-      fetchStudents();
-      alert("Student added successfully!");
-    } catch (error: any) {
-      alert(error.response?.data?.detail || "Failed to add student");
+      await studentApi.bulkImport(formData);
+      alert("Students imported successfully!");
+      fetchData();
+    } catch (error) {
+      console.error("Import failed:", error);
+      alert("Failed to import students.");
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
-  if (loading) return <div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div></div>;
+  const handleDelete = async (studentId: number) => {
+    if (!confirm("Are you sure you want to delete this student?")) return;
+    try {
+      await studentApi.delete(studentId);
+      fetchData();
+    } catch (error) {
+      console.error("Failed to delete student:", error);
+      alert("Failed to delete student.");
+    }
+  };
+
+  if (loading) return <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-slate-950"><div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 dark:border-slate-800 border-t-emerald-500"></div></div>;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 text-gray-900 dark:text-slate-200">
       <TopBar />
       <div className="flex">
         <Sidebar />
-        <div className="flex-1 max-w-7xl mx-auto px-4 py-8">
-          {/* Header */}
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-4">
+        <div className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8 gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                <Users className="h-6 w-6 text-blue-600" /> Student Management
-              </h1>
-              <p className="text-sm text-gray-500 mt-1">Total Students: {students.length}</p>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2"><Users className="h-6 w-6 text-emerald-500" /> Student Management</h1>
+              <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">Manage student records and bulk imports</p>
             </div>
-            <div className="flex gap-3">
-              <button onClick={downloadTemplate} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 text-sm">
-                <Download className="h-4 w-4" /> Template
+            <div className="flex items-center gap-3">
+              <button onClick={fetchData} className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl text-sm transition-colors shadow-lg shadow-emerald-900/20">
+                <RefreshCw className="h-4 w-4" /> Refresh
               </button>
-              <label className={`flex items-center gap-2 px-4 py-2 ${isImporting ? 'bg-gray-400' : 'bg-green-600 hover:bg-green-700'} text-white rounded-lg cursor-pointer text-sm`}>
-                <Upload className="h-4 w-4" /> {isImporting ? "Importing..." : "Import Excel"}
-                <input type="file" accept=".xlsx, .xls" onChange={handleFileUpload} className="hidden" disabled={isImporting} />
-              </label>
-              <button onClick={() => setShowAddModal(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
-                <UserPlus className="h-4 w-4" /> Add Student
-              </button>
+              {hasPermission(Permission.STUDENT_IMPORT) && (
+                <>
+                  <input type="file" ref={fileInputRef} onChange={handleImport} accept=".xlsx,.xls,.csv" className="hidden" />
+                  <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl text-sm transition-colors shadow-lg shadow-blue-900/20">
+                    <Upload className="h-4 w-4" /> Import Excel
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
-          {/* Import Result Alert */}
-          {importResult && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="h-5 w-5 text-blue-600" />
-                  <p className="text-blue-800 font-medium">
-                    Import Complete: {importResult.created} created, {importResult.skipped} skipped.
-                  </p>
-                </div>
-                <button onClick={() => setImportResult(null)} className="text-blue-400 hover:text-blue-600"><X className="h-4 w-4" /></button>
+          {/* Search Bar */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 p-5 mb-6 shadow-sm">
+            <div className="flex flex-col md:flex-row gap-4 items-end">
+              <div className="flex-1">
+                <label className="block text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Search Name / ADM No</label>
+                <input type="text" value={filters.search} onChange={(e) => setFilters({ ...filters, search: e.target.value })} onKeyPress={(e) => e.key === "Enter" && fetchData()} placeholder="e.g. John or ADM/123" className="w-full px-4 py-2.5 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50" />
               </div>
-              {importResult.errors.length > 0 && (
-                <div className="mt-2 text-sm text-red-600">
-                  <p className="font-bold flex items-center gap-1"><AlertTriangle className="h-4 w-4" /> Errors:</p>
-                  <ul className="list-disc list-inside max-h-20 overflow-y-auto">
-                    {importResult.errors.map((err, i) => <li key={i}>{err}</li>)}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Search */}
-          <div className="bg-white rounded-lg shadow-sm border p-4 mb-6">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search by name, ADM No, or program..." className="w-full pl-10 pr-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <div className="flex-1">
+                <label className="block text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Program</label>
+                <input type="text" value={filters.program} onChange={(e) => setFilters({ ...filters, program: e.target.value })} onKeyPress={(e) => e.key === "Enter" && fetchData()} placeholder="e.g. Computer Science" className="w-full px-4 py-2.5 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50" />
+              </div>
+              <div className="w-32">
+                <label className="block text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Year</label>
+                <select value={filters.year} onChange={(e) => setFilters({ ...filters, year: e.target.value })} className="w-full px-3 py-2.5 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50">
+                  <option value="">All</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option>
+                </select>
+              </div>
+              <button onClick={fetchData} className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl text-sm transition-colors shadow-lg shadow-emerald-900/20">Search</button>
+              <button onClick={() => { setFilters({ search: "", program: "", year: "" }); setTimeout(fetchData, 100); }} className="px-4 py-2.5 text-sm font-medium text-rose-500 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl transition-colors">Clear</button>
             </div>
           </div>
 
           {/* Students Table */}
-          <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-50 border-b">
+                <thead className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-800">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Student</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ADM No</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Program</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Year</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Student</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Program</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Year</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Email</th>
+                    <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y">
-                  {filteredStudents.length === 0 ? (
-                    <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-500">No students found</td></tr>
+                <tbody className="divide-y divide-gray-200 dark:divide-slate-800">
+                  {students.length === 0 ? (
+                    <tr><td colSpan={5} className="px-6 py-16 text-center text-gray-500 dark:text-slate-500"><Users className="h-12 w-12 text-emerald-500/30 mx-auto mb-3" /><p className="font-medium">No students found</p></td></tr>
                   ) : (
-                    filteredStudents.map((student) => (
-                      <tr key={student.id} className="hover:bg-gray-50 text-sm">
-                        <td className="px-4 py-3 font-medium text-gray-900">{student.first_name} {student.last_name}</td>
-                        <td className="px-4 py-3 text-gray-600">{student.student_id}</td>
-                        <td className="px-4 py-3 text-gray-600">{student.email}</td>
-                        <td className="px-4 py-3 text-gray-600">{student.program}</td>
-                        <td className="px-4 py-3 text-gray-600">Year {student.year_of_study}</td>
+                    students.map((student) => (
+                      <tr key={student.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/30 transition-colors">
+                        <td className="px-6 py-4 text-sm">
+                          <p className="font-semibold text-gray-900 dark:text-white">{student.first_name} {student.last_name}</p>
+                          <p className="text-xs text-gray-500 dark:text-slate-500">{student.student_id}</p>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-700 dark:text-slate-300">{student.program}</td>
+                        <td className="px-6 py-4 text-sm text-gray-700 dark:text-slate-300">Year {student.year_of_study}</td>
+                        <td className="px-6 py-4 text-sm text-gray-700 dark:text-slate-300">{student.email || "N/A"}</td>
+                        <td className="px-6 py-4">
+                          {hasPermission(Permission.STUDENT_MANAGE) && (
+                            <div className="flex gap-2">
+                              <button onClick={() => { setSelectedStudent(student); setEditMode(true); }} className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-lg transition-colors">
+                                <Edit className="h-4 w-4" />
+                              </button>
+                              <button onClick={() => handleDelete(student.id)} className="p-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg transition-colors">
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          )}
+                        </td>
                       </tr>
                     ))
                   )}
@@ -214,35 +158,6 @@ export default function StudentManagementPage() {
               </table>
             </div>
           </div>
-
-          {/* Add Student Modal */}
-          {showAddModal && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <div className="bg-white rounded-lg p-6 max-w-md w-full">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-bold">Add New Student</h2>
-                  <button onClick={() => setShowAddModal(false)} className="text-gray-500 hover:text-gray-700"><X className="h-5 w-5" /></button>
-                </div>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div><label className="block text-sm font-medium text-gray-700 mb-1">ADM No *</label><input type="text" value={formData.student_id} onChange={(e) => setFormData({...formData, student_id: e.target.value})} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500" /></div>
-                    <div><label className="block text-sm font-medium text-gray-700 mb-1">Year</label><select value={formData.year_of_study} onChange={(e) => setFormData({...formData, year_of_study: parseInt(e.target.value)})} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"><option value={1}>Year 1</option><option value={2}>Year 2</option><option value={3}>Year 3</option><option value={4}>Year 4</option></select></div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div><label className="block text-sm font-medium text-gray-700 mb-1">First Name *</label><input type="text" value={formData.first_name} onChange={(e) => setFormData({...formData, first_name: e.target.value})} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500" /></div>
-                    <div><label className="block text-sm font-medium text-gray-700 mb-1">Last Name *</label><input type="text" value={formData.last_name} onChange={(e) => setFormData({...formData, last_name: e.target.value})} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500" /></div>
-                  </div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Email *</label><input type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500" /></div>
-                  <div><label className="block text-sm font-medium text-gray-700 mb-1">Program *</label><input type="text" value={formData.program} onChange={(e) => setFormData({...formData, program: e.target.value})} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500" /></div>
-                  <p className="text-xs text-gray-500 bg-gray-50 p-2 rounded">Note: A user account will be created automatically. Username = ADM No, Password = student123</p>
-                </div>
-                <div className="flex gap-3 mt-6">
-                  <button onClick={handleManualAdd} className="flex-1 py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Create Student</button>
-                  <button onClick={() => setShowAddModal(false)} className="flex-1 py-2 px-4 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">Cancel</button>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>
