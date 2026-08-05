@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from typing import List, Optional
 from sqlalchemy.orm import Session
 from typing import List
 
@@ -17,6 +18,21 @@ router = APIRouter(prefix="/students", tags=["Students"])
 # ==================== STUDENT ROUTES ====================
 
 # 1. View Own Profile
+@router.get("/")
+async def get_students(
+    skip: int = 0, limit: int = 1000, search: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get all students with optional search and pagination"""
+    query = db.query(Student)
+    if search:
+        query = query.filter(
+            (Student.first_name.ilike(f"%{search}%")) | 
+            (Student.last_name.ilike(f"%{search}%")) | 
+            (Student.student_id.ilike(f"%{search}%"))
+        )
+    return query.offset(skip).limit(limit).all()
 @router.get("/me", response_model=StudentResponse)
 async def get_my_profile(
     current_user: User = Depends(get_current_active_user),

@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from ..models.models import User, Student, StorageLocation, RegistryInventory, CertificateStatus
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
@@ -8,7 +9,7 @@ from ..models.models import (
     User, StorageLocation, RegistryInventory, StorageLocationHistory
 )
 from ..auth.auth import get_current_active_user
-from ..core.permissions import require_permission, Permission
+from ..core.permissions import require_permission, require_any_permission, Permission
 from ..utils.audit import log_audit
 
 router = APIRouter(prefix="/storage", tags=["Storage"])
@@ -308,4 +309,82 @@ async def get_certificates_in_location(
             }
             for c in certificates
         ]
+    }
+from pydantic import BaseModel
+from typing import List
+
+class CertificateImportItem(BaseModel):
+    identifier: str
+    series: str
+    year: str
+    student_name: str
+    course: str
+    certificate_no: str
+
+@router.post("/bulk-import-certificates")
+async def bulk_import_certificates(
+    certificates_data: List[CertificateImportItem],
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_any_permission([Permission.REGISTRY_ADD_INVENTORY, Permission.EXAM_APPROVE]))
+):
+    """Bulk import certificates from Excel with new template format"""
+    created_count = 0
+    skipped_count = 0
+    errors = []
+
+    for item in certificates_data:
+        try:
+            # Check if certificate already exists
+            existing = db.query(RegistryInventory).filter(
+                RegistryInventory.certificate_number == item.certificate_no
+            ).first()
+            
+            if existing:
+                skipped_count += 1
+                continue
+
+            # Find student by name (basic matching)
+            name_parts = item.student_name.strip().split()
+            student = None
+            if len(name_parts) >= 2:
+                first_name = name_parts[0]
+                last_name = " ".join(name_parts[1:])
+                student = db.query(Student).filter(
+                    Student.first_name.ilike(f"%{first_name}%"),
+                    Student.last_name.ilike(f"%{last_name}%"),
+                    Student.program.ilike(f"%{item.course}%")
+                ).first()
+            
+            if not student:
+                # Try full name match
+                student = db.query(Student).filter(
+                    Student.first_name.ilike(f"%{item.student_name}%") |
+                    Student.last_name.ilike(f"%{item.student_name}%")
+                ).first()
+
+            # Create certificate record
+            new_cert = RegistryInventory(
+                certificate_number=item.certificate_no,
+                student_id=student.id if student else 1,  # Default to first student if not found
+                programme=item.course,
+                graduation_year=item.year,
+                status=CertificateStatus.AWAITING_CLEARANCE,
+                storage_location=f"{item.identifier} - {item.series}"
+            )
+            db.add(new_cert)
+            created_count += 1
+
+        except Exception as e:
+            errors.append(f"Row {item.certificate_no}: {str(e)}")
+
+    db.commit()
+
+    await log_audit(db, current_user.id, "CERTIFICATES_BULK_IMPORTED", "registry",
+                    f"Imported {created_count} certificates, skipped {skipped_count}")
+
+    return {
+        "message": "Import completed",
+        "created": created_count,
+        "skipped": skipped_count,
+        "errors": errors
     }
