@@ -165,7 +165,7 @@ ROLE_PERMISSIONS = {
         Permission.STUDENT_RESCHEDULE_APPOINTMENT, Permission.STUDENT_APPLY_CLEARANCE,
         Permission.STUDENT_VIEW_OWN_NOTIFICATIONS, Permission.DASHBOARD_VIEW_STUDENT,
     ],
-    
+
     UserRole.FINANCE: [
         Permission.FINANCE_VIEW_DASHBOARD, Permission.FINANCE_SEARCH_STUDENTS,
         Permission.FINANCE_VIEW_PENDING, Permission.FINANCE_VIEW_HISTORY,
@@ -175,7 +175,7 @@ ROLE_PERMISSIONS = {
         Permission.FINANCE_CREATE_NOTIFICATION, Permission.SEARCH_STUDENTS,
         Permission.DASHBOARD_VIEW_FINANCE,
     ],
-    
+
     UserRole.EXAMINATION_OFFICE: [
         Permission.EXAM_VIEW_DASHBOARD, Permission.EXAM_VIEW_PENDING,
         Permission.EXAM_VERIFY_ACADEMIC, Permission.EXAM_APPROVE,
@@ -192,7 +192,7 @@ ROLE_PERMISSIONS = {
         Permission.DEAN_ADD_REMARKS, Permission.DEAN_VIEW_REPORTS,
         Permission.SEARCH_STUDENTS, Permission.DASHBOARD_VIEW_DEAN,
     ],
-    
+
     UserRole.REGISTRY_OFFICER: [
         Permission.REGISTRY_VIEW_DASHBOARD, Permission.REGISTRY_SEARCH_CLEARED,
         Permission.REGISTRY_SEARCH_INVENTORY, Permission.REGISTRY_VIEW_INVENTORY,
@@ -210,7 +210,7 @@ ROLE_PERMISSIONS = {
         Permission.SEARCH_STUDENTS, Permission.SEARCH_REGISTRY_INVENTORY,
         Permission.SEARCH_COLLECTIONS, Permission.DASHBOARD_VIEW_REGISTRY,
     ],
-    
+
     UserRole.INTERNAL_AUDITOR: [
         Permission.AUDITOR_VIEW_LOGS, Permission.AUDITOR_VIEW_LOGIN_HISTORY,
         Permission.AUDITOR_VIEW_ACTIVITY, Permission.AUDITOR_VIEW_CLEARANCE_HISTORY,
@@ -221,14 +221,46 @@ ROLE_PERMISSIONS = {
     ],
 }
 
-# ============= 3. PERMISSION CHECK FUNCTIONS =============
+# ============= 3. PERMISSION CHECK FUNCTIONS (MULTI-ROLE READY) =============
+
+def get_user_effective_role(user: User):
+    """Helper to get the role string, checking new active_role first, then legacy role"""
+    if hasattr(user, 'active_role') and user.active_role:
+        return user.active_role.name
+    if hasattr(user, 'role') and user.role:
+        return str(user.role).lower()
+    return None
 
 def has_permission(user: User, permission: Permission) -> bool:
     if not user: return False
-    if not user.is_active: return False
-    if user.role == UserRole.SUPER_ADMIN: return True
-    user_permissions = ROLE_PERMISSIONS.get(user.role, [])
-    return permission in user_permissions
+    if not getattr(user, 'is_active', True): return False
+    
+    role_name = get_user_effective_role(user)
+    
+    # 1. SUPER ADMIN OVERRIDE (Fixes the 403 Forbidden lockout!)
+    if role_name in ["super_admin", "admin"]:
+        return True
+        
+    # 2. MULTI-ROLE UNION CHECK (New System: Combines permissions from all assigned roles)
+    if hasattr(user, 'roles') and user.roles:
+        for r in user.roles:
+            try:
+                role_enum = UserRole(r.name)
+                if permission in ROLE_PERMISSIONS.get(role_enum, []):
+                    return True
+            except ValueError:
+                continue
+                
+    # 3. LEGACY FALLBACK (Old System: Single role string)
+    if role_name:
+        try:
+            role_enum = UserRole(role_name)
+            if permission in ROLE_PERMISSIONS.get(role_enum, []):
+                return True
+        except ValueError:
+            pass
+
+    return False
 
 def has_any_permission(user: User, permissions: List[Permission]) -> bool:
     return any(has_permission(user, p) for p in permissions)
@@ -238,9 +270,28 @@ def has_all_permissions(user: User, permissions: List[Permission]) -> bool:
 
 def get_user_permissions(user: User) -> List[str]:
     if not user: return []
-    if user.role == UserRole.SUPER_ADMIN:
+    
+    role_name = get_user_effective_role(user)
+    if role_name in ["super_admin", "admin"]:
         return [p.value for p in Permission]
-    return [p.value for p in ROLE_PERMISSIONS.get(user.role, [])]
+        
+    perms = set()
+    if hasattr(user, 'roles') and user.roles:
+        for r in user.roles:
+            try:
+                role_enum = UserRole(r.name)
+                perms.update([p.value for p in ROLE_PERMISSIONS.get(role_enum, [])])
+            except ValueError:
+                pass
+                
+    if role_name:
+        try:
+            role_enum = UserRole(role_name)
+            perms.update([p.value for p in ROLE_PERMISSIONS.get(role_enum, [])])
+        except ValueError:
+            pass
+            
+    return list(perms)
 
 # ============= 4. FASTAPI DEPENDENCIES (THE SECURITY GUARDS) =============
 
@@ -285,3 +336,51 @@ def require_student_ownership():
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access Denied. You can only access your own records.")
         return current_user
     return ownership_checker
+from ..models.models import UserTask, Task
+
+# ==========================================
+# PHASE 4: GRANULAR TASK PERMISSIONS
+# ==========================================
+
+def has_task(user: User, task_code: str, db: Session) -> bool:
+    """
+    Checks if a user has a specific granular task enabled.
+    Example: has_task(user, 'registry_upload', db)
+    """
+    if not user: return False
+    
+    # 1. Super Admin Override
+    role_name = get_user_effective_role(user)
+    if role_name in ["super_admin", "admin"]:
+        return True
+        
+    # 2. Find the task by its code
+    task = db.query(Task).filter(Task.code == task_code).first()
+    if not task: return False
+    
+    # 3. Check if the user has this task enabled in user_tasks table
+    user_task = db.query(UserTask).filter(
+        UserTask.user_id == user.id,
+        UserTask.task_id == task.id,
+        UserTask.is_enabled == True
+    ).first()
+    
+    return user_task is not None
+
+def require_task(task_code: str):
+    """
+    FastAPI Dependency to protect endpoints with granular tasks.
+    Usage: @router.post("/upload", dependencies=[Depends(require_task("registry_upload"))])
+    """
+    def task_checker(
+        current_user: User = Depends(get_current_active_user),
+        db: Session = Depends(get_db)
+    ):
+        if not has_task(current_user, task_code, db):
+            logger.warning(f"Task Authorization Failed: User {current_user.username} lacked task '{task_code}'")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, 
+                detail=f"Access Denied. You do not have the '{task_code}' permission."
+            )
+        return current_user
+    return task_checker

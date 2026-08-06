@@ -7,7 +7,7 @@ from ..models.models import User
 from ..schemas.schemas import UserCreate, UserResponse, Token
 from ..auth.auth import (
     authenticate_user, create_access_token, get_password_hash,
-    get_current_active_user, role_required
+    get_current_active_user, role_required, verify_password
 )
 from ..utils.audit import log_audit
 
@@ -21,16 +21,15 @@ async def register_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission(Permission.ADMIN_MANAGE_USERS))
 ):
-    # ... rest of the code
     # Check if user exists
     db_user = db.query(User).filter(User.username == user_data.username).first()
     if db_user:
         raise HTTPException(status_code=400, detail="Username already registered")
-    
+
     db_email = db.query(User).filter(User.email == user_data.email).first()
     if db_email:
         raise HTTPException(status_code=400, detail="Email already registered")
-    
+
     # Create new user
     hashed_password = get_password_hash(user_data.password)
     db_user = User(
@@ -43,36 +42,67 @@ async def register_user(
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
-    
+
     await log_audit(db, current_user.id, "USER_REGISTERED", f"Registered user: {user_data.username}")
-    
+
     return db_user
 
-@router.post("/login", response_model=Token)
-async def login(
+@router.post("/login")
+def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ):
-    user = authenticate_user(db, form_data.username, form_data.password)
-    if not user:
+    # 1. Find the user by username
+    user = db.query(User).filter(User.username == form_data.username).first()
+
+    # 2. Verify the password
+    if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    # 3. Check if user is active
+    if not user.is_active:
+        raise HTTPException(status_code=400, detail="Inactive user account")
+
+    # 4. Create the JWT Token
+    access_token = create_access_token(data={"sub": user.username})
+
+    # 5. Safely get the role name for the frontend
+    # Checks the new active_role first, falls back to the old string role
+    role_name = "student"
+    if user.active_role:
+        role_name = user.active_role.name
+    elif user.role:
+        role_name = str(user.role)
+
+    # 6. Fetch user's granted tasks
+    from ..models.models import UserTask, Task
+    user_tasks = db.query(UserTask).filter(
+        UserTask.user_id == user.id,
+        UserTask.is_enabled == True
+    ).all()
     
-    access_token_expires = timedelta(minutes=30)
-    access_token = create_access_token(
-        data={"sub": user.username, "role": user.role.value},
-        expires_delta=access_token_expires
-    )
-    
-    await log_audit(db, user.id, "USER_LOGIN", f"User logged in: {user.username}")
-    
+    granted_task_codes = []
+    for ut in user_tasks:
+        task = db.query(Task).filter(Task.id == ut.task_id).first()
+        if task:
+            granted_task_codes.append(task.code)
+
+    # 7. Return a CLEAN dictionary (Prevents Pydantic relationship crashes!)
     return {
         "access_token": access_token,
         "token_type": "bearer",
-        "user": user
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "role": role_name,  # Frontend Sidebar needs this exact string!
+            "is_active": user.is_active,
+            "granted_tasks": granted_task_codes  # NEW: List of task codes like ['registry_upload', 'finance_approve']
+        }
     }
 
 @router.get("/me", response_model=UserResponse)

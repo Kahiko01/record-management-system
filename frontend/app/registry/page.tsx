@@ -1,19 +1,20 @@
 "use client";
 
 import { registryApi, clearanceApi } from "../lib/api";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import TopBar from "../components/TopBar";
 import Sidebar from "../components/Sidebar";
 import { useAuth, Permission } from "../context/AuthContext";
-import { Package, Search, RefreshCw, CheckCircle, Clock, Archive, MapPin } from "lucide-react";
+import { Package, Search, RefreshCw, CheckCircle, Clock, Archive, MapPin, Upload } from "lucide-react";
 
 export default function RegistryPage() {
-  const { hasPermission } = useAuth();
+  const { hasPermission, hasTask } = useAuth();
   const [inventory, setInventory] = useState<any[]>([]);
   const [clearedStudents, setClearedStudents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'inventory' | 'cleared'>('inventory');
   const [filters, setFilters] = useState({ search: "", status: "" });
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchData();
@@ -45,6 +46,30 @@ export default function RegistryPage() {
     }
   };
 
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    
+    // Handle the file upload here
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    try {
+      // Add your upload API call here
+      // await registryApi.uploadExcel(formData);
+      alert('File uploaded successfully!');
+      fetchData();
+    } catch (error) {
+      console.error('Upload failed:', error);
+      alert('Failed to upload file');
+    }
+    
+    // Reset the input so the same file can be uploaded again
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "collected":
@@ -71,9 +96,29 @@ export default function RegistryPage() {
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">📦 Registry Office</h1>
               <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">Manage certificate inventory and student collections</p>
             </div>
-            <button onClick={fetchData} className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl text-sm transition-colors shadow-lg shadow-emerald-900/20">
-              <RefreshCw className="h-4 w-4" /> Refresh
-            </button>
+            <div className="flex items-center gap-3">
+              {/* Upload Button - Only visible if user has the registry_upload task */}
+              {hasTask('registry_upload') && (
+                <>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileUpload}
+                    accept=".xlsx,.xls,.csv"
+                    className="hidden"
+                  />
+                  <button 
+                    onClick={() => fileInputRef.current?.click()} 
+                    className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl text-sm transition-colors shadow-lg shadow-blue-900/20"
+                  >
+                    <Upload className="h-4 w-4" /> Import Excel
+                  </button>
+                </>
+              )}
+              <button onClick={fetchData} className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl text-sm transition-colors shadow-lg shadow-emerald-900/20">
+                <RefreshCw className="h-4 w-4" /> Refresh
+              </button>
+            </div>
           </div>
 
           {/* Tabs */}

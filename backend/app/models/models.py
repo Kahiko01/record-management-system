@@ -1,8 +1,36 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text, Float, Enum, JSON
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text, Float, Enum, JSON, Table
+from datetime import datetime
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from ..core.database import Base
 import enum
+
+# ==========================================
+# MULTI-ROLE ASSOCIATION TABLE (The Bridge)
+# ==========================================
+user_roles = Table(
+    "user_roles",
+    Base.metadata,
+    Column("user_id", Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+    Column("role_id", Integer, ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
+    Column("is_department_uploader", Boolean, default=False),
+    Column("uploader_department", String, nullable=True)
+)
+
+# ==========================================
+# ROLES TABLE
+# ==========================================
+class Role(Base):
+    __tablename__ = "roles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True, nullable=False) # e.g., "finance", "dean"
+    display_name = Column(String, nullable=False) # e.g., "Finance Officer"
+    department = Column(String, nullable=True)
+    
+    # Relationship to users
+    users = relationship("User", secondary=user_roles, back_populates="roles")
+
 
 # ============= ENUMS =============
 
@@ -57,19 +85,24 @@ class NotificationType(str, enum.Enum):
 
 class User(Base):
     __tablename__ = "users"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True, nullable=False)
     username = Column(String, unique=True, index=True, nullable=False)
     full_name = Column(String, nullable=False)
     hashed_password = Column(String, nullable=False)
-    role = Column(Enum(UserRole), nullable=False)
+    role = Column(String, nullable=True) # Keep this for now for backwards compatibility!
+    active_role_id = Column(Integer, ForeignKey("roles.id"), nullable=True)
     department = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)
     last_login = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    
+
+    # Multi-role relationship
+    roles = relationship("Role", secondary=user_roles, back_populates="users")
+    active_role = relationship("Role", foreign_keys=[active_role_id])
+
     # Relationships
     students = relationship("Student", back_populates="user")
     clearance_requests = relationship("ClearanceRequest", back_populates="student_user")
@@ -87,7 +120,7 @@ class User(Base):
 
 class Student(Base):
     __tablename__ = "students"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     student_id = Column(String, unique=True, index=True, nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -106,7 +139,7 @@ class Student(Base):
     passport_number = Column(String)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    
+
     # Relationships
     user = relationship("User", back_populates="students")
     clearance_request = relationship("ClearanceRequest", back_populates="student", uselist=False)
@@ -119,7 +152,7 @@ class Student(Base):
 
 class ClearanceRequest(Base):
     __tablename__ = "clearance_requests"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     student_id = Column(Integer, ForeignKey("students.id"), nullable=False, unique=True)
     student_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -129,7 +162,7 @@ class ClearanceRequest(Base):
     collection_eligible_date = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    
+
     # Relationships
     student = relationship("Student", back_populates="clearance_request")
     student_user = relationship("User", back_populates="clearance_requests")
@@ -140,7 +173,7 @@ class ClearanceRequest(Base):
 
 class FinanceClearance(Base):
     __tablename__ = "finance_clearances"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     clearance_request_id = Column(Integer, ForeignKey("clearance_requests.id"), nullable=False, unique=True)
     status = Column(Enum(ClearanceStatus), default=ClearanceStatus.PENDING)
@@ -152,14 +185,14 @@ class FinanceClearance(Base):
     cleared_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    
+
     # Relationships
     clearance_request = relationship("ClearanceRequest", back_populates="finance_clearance")
     finance_officer = relationship("User", back_populates="finance_clearances")
 
 class ExaminationClearance(Base):
     __tablename__ = "examination_clearances"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     clearance_request_id = Column(Integer, ForeignKey("clearance_requests.id"), nullable=False, unique=True)
     status = Column(Enum(ClearanceStatus), default=ClearanceStatus.PENDING)
@@ -173,7 +206,7 @@ class ExaminationClearance(Base):
     cleared_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    
+
     # Relationships
     clearance_request = relationship("ClearanceRequest", back_populates="examination_clearance")
     examination_officer = relationship("User", back_populates="examination_clearances")
@@ -182,7 +215,7 @@ class ExaminationClearance(Base):
 
 class AcademicClearance(Base):
     __tablename__ = "academic_clearances"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     clearance_request_id = Column(Integer, ForeignKey("clearance_requests.id"), nullable=False, unique=True)
     status = Column(Enum(ClearanceStatus), default=ClearanceStatus.PENDING)
@@ -194,14 +227,14 @@ class AcademicClearance(Base):
     cleared_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    
+
     # Relationships
     clearance_request = relationship("ClearanceRequest", back_populates="academic_clearance")
     academic_officer = relationship("User", back_populates="academic_clearances")
 
 class DeanApproval(Base):
     __tablename__ = "dean_approvals"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     clearance_request_id = Column(Integer, ForeignKey("clearance_requests.id"), nullable=False, unique=True)
     status = Column(Enum(ClearanceStatus), default=ClearanceStatus.PENDING)
@@ -210,7 +243,7 @@ class DeanApproval(Base):
     approved_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    
+
     # Relationships
     clearance_request = relationship("ClearanceRequest", back_populates="dean_approval")
     dean = relationship("User", back_populates="dean_approvals")
@@ -219,7 +252,7 @@ class DeanApproval(Base):
 
 class RegistryInventory(Base):
     __tablename__ = "registry_inventory"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     certificate_number = Column(String, unique=True, index=True, nullable=False)
     student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
@@ -242,7 +275,7 @@ class RegistryInventory(Base):
     pdf_path = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    
+
     # Relationships
     student = relationship("Student", back_populates="registry_inventory")
     registry_officer = relationship("User", back_populates="registry_actions")
@@ -253,7 +286,7 @@ class RegistryInventory(Base):
 
 class StorageLocation(Base):
     __tablename__ = "storage_locations"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
     code = Column(String, unique=True, index=True, nullable=False)
@@ -270,14 +303,14 @@ class StorageLocation(Base):
     created_by = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    
+
     # Relationships
     certificates = relationship("RegistryInventory", back_populates="storage_location_ref")
     created_by_user = relationship("User", foreign_keys=[created_by])
 
 class StorageLocationHistory(Base):
     __tablename__ = "storage_location_history"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     certificate_id = Column(Integer, ForeignKey("registry_inventory.id"), nullable=False)
     location_id = Column(Integer, ForeignKey("storage_locations.id"), nullable=False)
@@ -286,7 +319,7 @@ class StorageLocationHistory(Base):
     performed_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     notes = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
+
     # Relationships
     certificate = relationship("RegistryInventory")
     location = relationship("StorageLocation", foreign_keys=[location_id])
@@ -297,7 +330,7 @@ class StorageLocationHistory(Base):
 
 class CollectionAppointment(Base):
     __tablename__ = "collection_appointments"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
     certificate_id = Column(Integer, ForeignKey("registry_inventory.id"), nullable=False)
@@ -309,14 +342,14 @@ class CollectionAppointment(Base):
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    
+
     # Relationships
     student = relationship("Student", back_populates="appointments")
     created_by_user = relationship("User", back_populates="appointments_created")
 
 class CertificateCollection(Base):
     __tablename__ = "certificate_collections"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     certificate_id = Column(Integer, ForeignKey("registry_inventory.id"), nullable=False, unique=True)
     student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
@@ -331,7 +364,7 @@ class CertificateCollection(Base):
     acknowledgement_received = Column(Boolean, default=True)
     notes = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
+
     # Relationships
     certificate = relationship("RegistryInventory", back_populates="collection")
     student = relationship("Student", back_populates="collections")
@@ -341,7 +374,7 @@ class CertificateCollection(Base):
 
 class Notification(Base):
     __tablename__ = "notifications"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
     sender_id = Column(Integer, ForeignKey("users.id"), nullable=True)
@@ -353,7 +386,7 @@ class Notification(Base):
     link = Column(String)
     extra_data = Column(JSON)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
+
     # Relationships
     student = relationship("Student", back_populates="notifications")
     sender = relationship("User", back_populates="notifications_sent")
@@ -362,7 +395,7 @@ class Notification(Base):
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     action = Column(String, nullable=False)
@@ -373,6 +406,32 @@ class AuditLog(Base):
     ip_address = Column(String)
     user_agent = Column(String)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
+
     # Relationships
     user = relationship("User", back_populates="audit_logs")
+# ==========================================
+# PHASE 4: GRANULAR TASK PERMISSIONS
+# ==========================================
+
+class Task(Base):
+    __tablename__ = "tasks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String, unique=True, index=True, nullable=False) # e.g., 'registry_upload'
+    name = Column(String, nullable=False)                          # e.g., 'Registry Bulk Upload'
+    department = Column(String, nullable=True)                     # e.g., 'Registry'
+
+class UserTask(Base):
+    __tablename__ = "user_tasks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    task_id = Column(Integer, ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False)
+    is_enabled = Column(Boolean, default=True)
+    granted_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    granted_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("User", foreign_keys=[user_id])
+    task = relationship("Task")
+    granter = relationship("User", foreign_keys=[granted_by])

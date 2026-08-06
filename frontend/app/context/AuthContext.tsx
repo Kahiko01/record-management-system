@@ -159,7 +159,7 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     Permission.STORAGE_UPDATE_LOCATION, Permission.STORAGE_ASSIGN_CERTIFICATE,
   ],
   registry_officer: [
-    Permission.REGISTRY_VIEW_DASHBOARD, Permission.REGISTRY_SEARCH_CLEARED,    
+    Permission.REGISTRY_VIEW_DASHBOARD, Permission.REGISTRY_SEARCH_CLEARED,
 Permission.REGISTRY_SEARCH_INVENTORY, Permission.REGISTRY_VIEW_INVENTORY,
     Permission.REGISTRY_ADD_INVENTORY, Permission.REGISTRY_UPDATE_INVENTORY,
     Permission.REGISTRY_ARCHIVE_INVENTORY, Permission.REGISTRY_REMOVE_INVENTORY,
@@ -169,7 +169,7 @@ Permission.REGISTRY_SEARCH_INVENTORY, Permission.REGISTRY_VIEW_INVENTORY,
     Permission.REGISTRY_VERIFY_COLLECTION, Permission.REGISTRY_RECORD_COLLECTION,
     Permission.REGISTRY_CANCEL_COLLECTION, Permission.REGISTRY_MANAGE_REPLACEMENT,
     Permission.REGISTRY_VIEW_REPORTS, Permission.REGISTRY_EXPORT_REPORTS,
-    Permission.REGISTRY_CREATE_NOTIFICATION, Permission.STORAGE_CREATE_LOCATION, 
+    Permission.REGISTRY_CREATE_NOTIFICATION, Permission.STORAGE_CREATE_LOCATION,
  Permission.STORAGE_UPDATE_LOCATION, Permission.STORAGE_VIEW,
     Permission.STORAGE_ASSIGN_CERTIFICATE, Permission.STORAGE_TRANSFER_CERTIFICATE,
     Permission.SEARCH_STUDENTS, Permission.SEARCH_REGISTRY_INVENTORY,
@@ -249,6 +249,7 @@ export const ROLE_MENUS: Record<string, MenuItem[]> = {
     { title: "Inventory Records", icon: "📦", path: "/storage", permissions: [Permission.STORAGE_VIEW] },
   ],
 };
+
 interface AuthContextType {
   user: User | null;
   token: string | null;
@@ -267,6 +268,7 @@ interface AuthContextType {
   isDean: () => boolean;
   isRegistry: () => boolean;
   isAuditor: () => boolean;
+  hasTask: (taskCode: string) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -342,6 +344,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  const hasTask = (taskCode: string): boolean => {
+    if (!user) return false;
+    // Super Admin always has all tasks
+    if (user.role === 'super_admin' || user.role === 'admin') return true;
+    // Check if the task code is in the user's granted_tasks array
+    return (user as any).granted_tasks?.includes(taskCode) || false;
+  };
+
   const isAdmin = () => user?.role === 'super_admin';
   const isStudent = () => user?.role === 'student';
   const isFinance = () => user?.role === 'finance';
@@ -355,6 +365,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user, token, loading, login, logout, isAuthenticated,
       hasPermission, hasAnyPermission, hasAllPermissions, getUserMenus,
       isAdmin, isStudent, isFinance, isExamination, isDean, isRegistry, isAuditor,
+      hasTask,
     }}>
       {children}
     </AuthContext.Provider>

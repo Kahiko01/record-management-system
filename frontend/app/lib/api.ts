@@ -114,6 +114,11 @@ export const userApi = {
   toggleStatus: (id: number) => api.put(`/users/${id}/toggle-status`),
   resetPassword: (id: number, data: any) => api.put(`/users/${id}/reset-password`, data),
   getRoles: () => api.get('/users/roles'),
+  getRoles: () => api.get('/users/roles/list'),
+  updateRoles: (userId: number, data: any) => api.put(`/users/${userId}/roles`, data),
+  getTasks: () => api.get('/users/tasks/list'),
+  getUserTasks: (userId: number) => api.get(`/users/${userId}/tasks`),
+  updateTasks: (userId: number, data: any[]) => api.put(`/users/${userId}/tasks`, data),
 };
 
 // === NEW: FEE BALANCE API ===
