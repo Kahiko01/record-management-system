@@ -8,7 +8,7 @@ import { LogOut, Sun, Moon, Bell, Check, X, Inbox } from "lucide-react";
 export default function TopBar() {
   const { user, logout } = useAuth();
   const { theme, setTheme } = useTheme();
-  
+
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -38,7 +38,7 @@ export default function TopBar() {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         setNotifications(data.data || []);
@@ -101,14 +101,14 @@ export default function TopBar() {
     <header className="h-16 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between px-6 shadow-sm relative z-40">
       <div>
         <h2 className="text-lg font-bold text-gray-900 dark:text-white">
-          University Clearance System
+          KNP Digital Office
         </h2>
       </div>
-      
+
       <div className="flex items-center gap-4">
         {/* Notification Bell */}
         <div className="relative" ref={dropdownRef}>
-          <button 
+          <button
             onClick={() => setShowDropdown(!showDropdown)}
             className="p-2 rounded-lg bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 hover:bg-gray-200 dark:hover:bg-slate-700 transition-all duration-200 shadow-sm relative"
           >
@@ -129,7 +129,7 @@ export default function TopBar() {
                   <X className="h-4 w-4" />
                 </button>
               </div>
-              
+
               <div className="max-h-80 overflow-y-auto">
                 {loading ? (
                   <div className="flex items-center justify-center py-8">
@@ -156,7 +156,7 @@ export default function TopBar() {
                         </p>
                       </div>
                       {!n.is_read && (
-                        <button 
+                        <button
                           onClick={() => handleMarkRead(n.id)}
                           className="p-1 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded transition-colors"
                           title="Mark as read"
@@ -193,8 +193,8 @@ export default function TopBar() {
         </div>
 
         {/* Logout Button */}
-        <button 
-          onClick={logout} 
+        <button
+          onClick={logout}
           className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
         >
           <LogOut className="h-4 w-4" />

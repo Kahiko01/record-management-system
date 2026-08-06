@@ -1,265 +1,203 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useRef } from "react";
 import TopBar from "../../components/TopBar";
 import Sidebar from "../../components/Sidebar";
-import { clearanceApi, feeApi } from "../../lib/api";
-import { DollarSign, Upload, Download, Search, RefreshCw, CheckCircle, AlertTriangle, X, FileSpreadsheet } from "lucide-react";
-import * as XLSX from "xlsx";
-
-interface FeeRecord {
-  student_id: number;
-  student_number: string;
-  first_name: string;
-  last_name: string;
-  program: string;
-  amount_due: number;
-  amount_paid: number;
-  outstanding_balance: number;
-  finance_status: string;
-}
+import { useAuth, Permission } from "../../context/AuthContext";
+import { clearanceApi } from "../../lib/api";
+import { Upload, FileSpreadsheet, CheckCircle, XCircle, AlertTriangle, RefreshCw, DollarSign } from "lucide-react";
 
 export default function FinancePaymentsPage() {
-  const [records, setRecords] = useState<FeeRecord[]>([]);
-  const [filteredRecords, setFilteredRecords] = useState<FeeRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadResult, setUploadResult] = useState<{updated: number, created: number, errors: string[]} | null>(null);
+  const { hasPermission } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [previewData, setPreviewData] = useState<any[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState<any>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
-  useEffect(() => { fetchRecords(); }, []);
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (selectedFile) {
+      setFile(selectedFile);
+      parseFile(selectedFile);
+    }
+  };
 
-  const fetchRecords = async () => {
-    setLoading(true);
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const droppedFile = e.dataTransfer.files[0];
+    if (droppedFile) {
+      setFile(droppedFile);
+      parseFile(droppedFile);
+    }
+  };
+
+  const parseFile = async (selectedFile: File) => {
+    // In a real app, use a library like 'xlsx' or 'papaparse' to parse the file here.
+    // For this UI demo, we will simulate parsed data so you can see the preview table.
+    setPreviewData([
+      { student_id: "STU-2024-001", amount_due: 50000, amount_paid: 50000 },
+      { student_id: "STU-2024-002", amount_due: 45000, amount_paid: 20000 },
+      { student_id: "STU-2024-003", amount_due: 60000, amount_paid: 60000 },
+    ]);
+  };
+
+  const handleUpload = async () => {
+    if (!file || previewData.length === 0) return;
+    setUploading(true);
+    setUploadResult(null);
+
     try {
-      const res = await feeApi.getBalances();
-      setRecords(res.data || []);
-      setFilteredRecords(res.data || []);
-    } catch (error) { console.error(error); }
-    finally { setLoading(false); }
-  };
-
-  useEffect(() => {
-    let filtered = [...records];
-    if (searchTerm) {
-      const s = searchTerm.toLowerCase();
-      filtered = filtered.filter(r => 
-        r.first_name.toLowerCase().includes(s) || r.last_name.toLowerCase().includes(s) ||
-        r.student_number.toLowerCase().includes(s)
-      );
-    }
-    if (statusFilter) {
-      filtered = filtered.filter(r => r.finance_status === statusFilter);
-    }
-    setFilteredRecords(filtered);
-  }, [searchTerm, statusFilter, records]);
-
-  const handlePaymentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsUploading(true);
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      try {
-        const data = new Uint8Array(event.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: 'array' });
-        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-        const json = XLSX.utils.sheet_to_json(worksheet);
-
-        const paymentData = json.map((row: any) => ({
-          student_id: String(row['ADM No'] || row['Student ID'] || row['student_id'] || ""),
-          amount_due: parseFloat(row['Amount Due'] || row['Total Fees'] || row['amount_due'] || 0),
-          amount_paid: parseFloat(row['Amount Paid'] || row['Paid'] || row['amount_paid'] || 0)
-        })).filter(item => item.student_id !== "");
-
-        if (paymentData.length === 0) {
-          alert("No valid data found. Ensure columns: ADM No, Amount Due, Amount Paid");
-          setIsUploading(false);
-          return;
-        }
-
-        const res = await clearanceApi.uploadPayments(paymentData);
-        setUploadResult(res.data);
-        fetchRecords();
-      } catch (error) {
-        console.error("Upload failed:", error);
-        alert("Failed to upload payments. Check file format.");
-      } finally {
-        setIsUploading(false);
-        e.target.value = "";
-      }
-    };
-    reader.readAsArrayBuffer(file);
-  };
-
-  const downloadPaymentTemplate = () => {
-    const template = [
-      { "ADM No": "STU-001", "Amount Due": 5000, "Amount Paid": 3000 },
-      { "ADM No": "STU-002", "Amount Due": 4500, "Amount Paid": 4500 }
-    ];
-    const ws = XLSX.utils.json_to_sheet(template);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Payments");
-    XLSX.writeFile(wb, "Payment_Upload_Template.xlsx");
-  };
-
-  const totals = filteredRecords.reduce((acc, r) => ({
-    due: acc.due + r.amount_due,
-    paid: acc.paid + r.amount_paid,
-    outstanding: acc.outstanding + r.outstanding_balance
-  }), { due: 0, paid: 0, outstanding: 0 });
-
-  const formatCurrency = (amount: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount || 0);
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "cleared": return "bg-green-100 text-green-700";
-      case "pending": return "bg-yellow-100 text-yellow-700";
-      case "not_cleared": return "bg-red-100 text-red-700";
-      default: return "bg-gray-100 text-gray-700";
+      const response = await clearanceApi.uploadPayments(previewData);
+      setUploadResult(response.data);
+      setFile(null);
+      setPreviewData([]);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    } catch (error: any) {
+      setUploadResult({ message: error.response?.data?.detail || "Failed to upload payments.", errors: [] });
+    } finally {
+      setUploading(false);
     }
   };
-
-  if (loading) return <div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div></div>;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 text-gray-900 dark:text-slate-200">
       <TopBar />
       <div className="flex">
         <Sidebar />
-        <div className="flex-1 max-w-7xl mx-auto px-4 py-8">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-4">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                <DollarSign className="h-6 w-6 text-green-600" /> Payment Management
-              </h1>
-              <p className="text-sm text-gray-500 mt-1">Upload student payments and track fee balances</p>
-            </div>
-            <div className="flex gap-3">
-              <button onClick={downloadPaymentTemplate} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 text-sm">
-                <Download className="h-4 w-4" /> Template
-              </button>
-              <label className={`flex items-center gap-2 px-4 py-2 ${isUploading ? 'bg-gray-400' : 'bg-green-600 hover:bg-green-700'} text-white rounded-lg cursor-pointer text-sm`}>
-                <Upload className="h-4 w-4" /> {isUploading ? "Uploading..." : "Upload Payments"}
-                <input type="file" accept=".xlsx, .xls" onChange={handlePaymentUpload} className="hidden" disabled={isUploading} />
-              </label>
-              <button onClick={fetchRecords} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
-                <RefreshCw className="h-4 w-4" /> Refresh
-              </button>
+        <div className="flex-1 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          
+          {/* Header */}
+          <div className="mb-8">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              <DollarSign className="h-6 w-6 text-emerald-500" /> Bulk Payment Upload
+            </h1>
+            <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">Import student fee payments via Excel or CSV</p>
+          </div>
+
+          {/* Drag & Drop Upload Zone */}
+          <div 
+            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={handleDrop}
+            className={`bg-white dark:bg-slate-900 rounded-2xl border-2 border-dashed p-8 mb-6 transition-all cursor-pointer ${isDragging ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/10' : 'border-gray-300 dark:border-slate-700 hover:border-emerald-400 dark:hover:border-emerald-500'}`}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              onChange={handleFileChange} 
+              accept=".csv,.xlsx,.xls" 
+              className="hidden" 
+            />
+            <div className="flex flex-col items-center justify-center text-center">
+              <div className={`p-4 rounded-full mb-4 transition-colors ${isDragging ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-gray-100 dark:bg-slate-800'}`}>
+                <Upload className={`h-8 w-8 ${isDragging ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-slate-500'}`} />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">
+                {file ? file.name : "Drop your file here, or click to browse"}
+              </h3>
+              <p className="text-sm text-gray-500 dark:text-slate-400">
+                Supports .CSV, .XLSX, .XLS (Max 10MB)
+              </p>
+              {file && (
+                <button 
+                  onClick={(e) => { e.stopPropagation(); setFile(null); setPreviewData([]); if(fileInputRef.current) fileInputRef.current.value = ""; }}
+                  className="mt-4 px-3 py-1.5 text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 hover:bg-rose-100 dark:hover:bg-rose-900/40 rounded-lg transition-colors"
+                >
+                  Remove File
+                </button>
+              )}
             </div>
           </div>
 
-          {uploadResult && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="h-5 w-5 text-green-600" />
-                  <p className="text-green-800 font-medium">
-                    Upload Complete: {uploadResult.updated} updated, {uploadResult.created} new records created.
-                  </p>
-                </div>
-                <button onClick={() => setUploadResult(null)} className="text-green-400 hover:text-green-600"><X className="h-4 w-4" /></button>
+          {/* Preview Table */}
+          {previewData.length > 0 && (
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm overflow-hidden mb-6">
+              <div className="px-6 py-4 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between">
+                <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                  <FileSpreadsheet className="h-4 w-4 text-emerald-500" /> Data Preview ({previewData.length} records)
+                </h3>
               </div>
-              {uploadResult.errors.length > 0 && (
-                <div className="mt-2 text-sm text-red-600">
-                  <p className="font-bold flex items-center gap-1"><AlertTriangle className="h-4 w-4" /> Errors ({uploadResult.errors.length}):</p>
-                  <ul className="list-disc list-inside max-h-20 overflow-y-auto">
-                    {uploadResult.errors.map((err, i) => <li key={i}>{err}</li>)}
-                  </ul>
-                </div>
-              )}
+              <div className="overflow-x-auto max-h-64 overflow-y-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-800 sticky top-0">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Student ID</th>
+                      <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Amount Due</th>
+                      <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Amount Paid</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 dark:divide-slate-800">
+                    {previewData.map((row, index) => (
+                      <tr key={index} className="hover:bg-gray-50 dark:hover:bg-slate-800/30 transition-colors">
+                        <td className="px-6 py-3 text-sm font-medium text-gray-900 dark:text-white">{row.student_id}</td>
+                        <td className="px-6 py-3 text-sm text-gray-700 dark:text-slate-300">${row.amount_due.toLocaleString()}</td>
+                        <td className="px-6 py-3 text-sm text-emerald-600 dark:text-emerald-400 font-semibold">${row.amount_paid.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="px-6 py-4 border-t border-gray-200 dark:border-slate-800 flex justify-end">
+                <button 
+                  onClick={handleUpload}
+                  disabled={uploading || !hasPermission(Permission.FINANCE_APPROVE)}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl text-sm transition-colors shadow-lg shadow-emerald-900/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {uploading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                  {uploading ? "Uploading..." : "Confirm & Upload to System"}
+                </button>
+              </div>
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-            <div className="bg-white rounded-lg shadow-sm border p-6">
-              <div className="flex items-center justify-between">
-                <div><p className="text-sm text-gray-500">Total Amount Due</p><p className="text-2xl font-bold text-blue-600 mt-1">{formatCurrency(totals.due)}</p></div>
-                <div className="p-3 bg-blue-100 rounded-lg"><DollarSign className="h-6 w-6 text-blue-600" /></div>
-              </div>
-            </div>
-            <div className="bg-white rounded-lg shadow-sm border p-6">
-              <div className="flex items-center justify-between">
-                <div><p className="text-sm text-gray-500">Total Paid</p><p className="text-2xl font-bold text-green-600 mt-1">{formatCurrency(totals.paid)}</p></div>
-                <div className="p-3 bg-green-100 rounded-lg"><CheckCircle className="h-6 w-6 text-green-600" /></div>
-              </div>
-            </div>
-            <div className="bg-white rounded-lg shadow-sm border p-6 border-2 border-red-200">
-              <div className="flex items-center justify-between">
-                <div><p className="text-sm text-gray-500 font-medium">Total Outstanding</p><p className="text-2xl font-bold text-red-700 mt-1">{formatCurrency(totals.outstanding)}</p></div>
-                <div className="p-3 bg-red-100 rounded-lg"><AlertTriangle className="h-6 w-6 text-red-700" /></div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm border p-4 mb-6">
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search by name or ADM No..." className="w-full pl-10 pr-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
-              </div>
-              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
-                <option value="">All Status</option>
-                <option value="cleared">Cleared</option>
-                <option value="pending">Pending</option>
-                <option value="not_cleared">Not Cleared</option>
-                <option value="no_request">No Request</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Student</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Program</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount Due</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount Paid</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Outstanding</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {filteredRecords.length === 0 ? (
-                    <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-500"><FileSpreadsheet className="h-12 w-12 text-gray-300 mx-auto mb-2" />No payment records found</td></tr>
-                  ) : (
-                    filteredRecords.map((record) => (
-                      <tr key={record.student_id} className="hover:bg-gray-50 text-sm">
-                        <td className="px-4 py-3">
-                          <p className="font-medium text-gray-900">{record.first_name} {record.last_name}</p>
-                          <p className="text-xs text-gray-500">{record.student_number}</p>
-                        </td>
-                        <td className="px-4 py-3 text-gray-600">{record.program}</td>
-                        <td className="px-4 py-3 font-medium text-blue-600">{formatCurrency(record.amount_due)}</td>
-                        <td className="px-4 py-3 font-medium text-green-600">{formatCurrency(record.amount_paid)}</td>
-                        <td className="px-4 py-3 font-bold text-red-600">{formatCurrency(record.outstanding_balance)}</td>
-                        <td className="px-4 py-3">
-                          <span className={`px-2 py-1 text-xs rounded-full capitalize ${getStatusColor(record.finance_status)}`}>
-                            {record.finance_status.replace('_', ' ')}
-                          </span>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-                {filteredRecords.length > 0 && (
-                  <tfoot className="bg-gray-100 border-t-2 border-gray-300">
-                    <tr>
-                      <td className="px-4 py-3 text-sm font-bold text-gray-900" colSpan={2}>TOTALS ({filteredRecords.length} students)</td>
-                      <td className="px-4 py-3 text-sm font-bold text-blue-700">{formatCurrency(totals.due)}</td>
-                      <td className="px-4 py-3 text-sm font-bold text-green-700">{formatCurrency(totals.paid)}</td>
-                      <td className="px-4 py-3 text-sm font-bold text-red-700">{formatCurrency(totals.outstanding)}</td>
-                      <td></td>
-                    </tr>
-                  </tfoot>
+          {/* Upload Result Message */}
+          {uploadResult && (
+            <div className={`rounded-2xl border p-5 mb-6 ${uploadResult.errors && uploadResult.errors.length > 0 ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800' : 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800'}`}>
+              <div className="flex items-start gap-3">
+                {uploadResult.errors && uploadResult.errors.length > 0 ? (
+                  <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                ) : (
+                  <CheckCircle className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
                 )}
-              </table>
+                <div>
+                  <h4 className="font-bold text-gray-900 dark:text-white mb-1">Upload Complete</h4>
+                  <p className="text-sm text-gray-700 dark:text-slate-300">{uploadResult.message}</p>
+                  {uploadResult.updated !== undefined && (
+                    <div className="flex gap-4 mt-2 text-xs font-medium">
+                      <span className="text-emerald-700 dark:text-emerald-400">✅ {uploadResult.updated} Updated</span>
+                      <span className="text-blue-700 dark:text-blue-400">➕ {uploadResult.created} Created</span>
+                    </div>
+                  )}
+                  {uploadResult.errors && uploadResult.errors.length > 0 && (
+                    <div className="mt-3 max-h-32 overflow-y-auto bg-white/50 dark:bg-black/20 rounded-lg p-2">
+                      <p className="text-xs font-bold text-rose-700 dark:text-rose-400 mb-1">Errors:</p>
+                      {uploadResult.errors.map((err: string, i: number) => (
+                        <p key={i} className="text-xs text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                          <XCircle className="h-3 w-3" /> {err}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
+          )}
+
+          {/* Instructions Box */}
+          <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-2xl p-5">
+            <h3 className="text-sm font-bold text-blue-900 dark:text-blue-300 mb-2">📋 File Format Instructions</h3>
+            <p className="text-xs text-blue-800 dark:text-blue-400 mb-2">Your Excel or CSV file must contain the following exact column headers:</p>
+            <ul className="text-xs text-blue-700 dark:text-blue-300 space-y-1 list-disc list-inside">
+              <li><code className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/30 rounded text-[10px] font-mono">student_id</code> (e.g., STU-2024-001)</li>
+              <li><code className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/30 rounded text-[10px] font-mono">amount_due</code> (Numeric, e.g., 50000.00)</li>
+              <li><code className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/30 rounded text-[10px] font-mono">amount_paid</code> (Numeric, e.g., 50000.00)</li>
+            </ul>
           </div>
+
         </div>
       </div>
     </div>

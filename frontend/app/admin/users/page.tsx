@@ -29,8 +29,13 @@ export default function AdminUsersPage() {
   const [activeRoleId, setActiveRoleId] = useState<number | null>(null);
   const [assignedTasks, setAssignedTasks] = useState<any[]>([]);
 
+  // Re-fetch users whenever filters change (this powers the real-time search!)
   useEffect(() => {
     fetchData();
+  }, [filters]);
+
+  // Fetch roles and tasks only once on page load
+  useEffect(() => {
     fetchMasterData();
   }, []);
 
@@ -210,18 +215,18 @@ export default function AdminUsersPage() {
             <div className="relative">
               {/* Search Icon */}
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 dark:text-slate-500 pointer-events-none" />
-              
-              <input 
-                type="text" 
+
+              <input
+                type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by username or email..." 
-                className="w-full pl-10 pr-10 py-3 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all shadow-sm" 
+                placeholder="Search by username or email..."
+                className="w-full pl-10 pr-10 py-3 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all shadow-sm"
               />
-              
+
               {/* Clear Button (shows only when typing) */}
               {searchQuery && (
-                <button 
+                <button
                   onClick={() => setSearchQuery("")}
                   className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition-colors"
                   title="Clear search"
@@ -231,7 +236,7 @@ export default function AdminUsersPage() {
               )}
             </div>
             <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-2 flex items-center gap-1">
-              <RefreshCw className={`h-3 w-3 ${loading ? 'animate-spin' : ''}`} /> 
+              <RefreshCw className={`h-3 w-3 ${loading ? 'animate-spin' : ''}`} />
               {loading ? 'Searching...' : 'Results update automatically as you type'}
             </p>
           </div>

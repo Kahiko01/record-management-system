@@ -27,7 +27,7 @@ export default function CollectionsReportPage() {
   const [records, setRecords] = useState<CollectionRecord[]>([]);
   const [filteredRecords, setFilteredRecords] = useState<CollectionRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  
+
   // Filters
   const [filters, setFilters] = useState({
     search: "", status: "", location: "", building: ""
@@ -54,8 +54,8 @@ export default function CollectionsReportPage() {
     let filtered = [...records];
     if (filters.search) {
       const s = filters.search.toLowerCase();
-      filtered = filtered.filter(r => 
-        r.student_name.toLowerCase().includes(s) || 
+      filtered = filtered.filter(r =>
+        r.student_name.toLowerCase().includes(s) ||
         r.student_id.toLowerCase().includes(s) ||
         r.certificate_number.toLowerCase().includes(s)
       );
@@ -63,7 +63,7 @@ export default function CollectionsReportPage() {
     if (filters.status) filtered = filtered.filter(r => r.status === filters.status);
     if (filters.location) filtered = filtered.filter(r => r.storage_location.toLowerCase().includes(filters.location.toLowerCase()));
     if (filters.building) filtered = filtered.filter(r => r.building.toLowerCase().includes(filters.building.toLowerCase()));
-    
+
     setFilteredRecords(filtered);
   }, [filters, records]);
 
@@ -87,7 +87,7 @@ export default function CollectionsReportPage() {
       "Collection Date": r.collection_date,
       "Collected By": r.collected_by
     }));
-    
+
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Collections Report");
@@ -104,7 +104,7 @@ export default function CollectionsReportPage() {
 
     const headers = [["Cert No", "Student", "ADM No", "Program", "Status", "Location", "Building", "Room", "Collected By"]];
     const data = filteredRecords.map(r => [
-      r.certificate_number, r.student_name, r.student_id, r.program, 
+      r.certificate_number, r.student_name, r.student_id, r.program,
       r.status, r.storage_location, r.building, r.room, r.collected_by || "Not Collected"
     ]);
 
@@ -121,19 +121,19 @@ export default function CollectionsReportPage() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "ready_for_collection": return "bg-green-100 text-green-700";
-      case "collected": return "bg-blue-100 text-blue-700";
-      case "on_hold": return "bg-red-100 text-red-700";
-      default: return "bg-yellow-100 text-yellow-700";
+      case "ready_for_collection": return "bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-500/30";
+      case "collected": return "bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-500/30";
+      case "on_hold": return "bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-500/30";
+      default: return "bg-yellow-100 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-500/30";
     }
   };
 
   if (loading) {
-    return <div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div></div>;
+    return <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-slate-950"><div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 dark:border-slate-800 border-t-emerald-500"></div></div>;
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 text-gray-900 dark:text-slate-200">
       <TopBar />
       <div className="flex">
         <Sidebar />
@@ -141,19 +141,19 @@ export default function CollectionsReportPage() {
           {/* Header */}
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                <FileText className="h-6 w-6 text-blue-600" /> Collections & Storage Report
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <FileText className="h-6 w-6 text-blue-600 dark:text-blue-400" /> Collections & Storage Report
               </h1>
-              <p className="text-sm text-gray-500 mt-1">Track physical certificate placement and collection history</p>
+              <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">Track physical certificate placement and collection history</p>
             </div>
-            <div className="flex gap-3">
-              <button onClick={exportToExcel} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm">
+            <div className="flex gap-3 flex-wrap">
+              <button onClick={exportToExcel} className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-xl text-sm transition-colors shadow-lg shadow-green-900/20">
                 <FileSpreadsheet className="h-4 w-4" /> Export Excel
               </button>
-              <button onClick={exportToPDF} className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm">
+              <button onClick={exportToPDF} className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-xl text-sm transition-colors shadow-lg shadow-red-900/20">
                 <Download className="h-4 w-4" /> Export PDF
               </button>
-              <button onClick={fetchReport} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 text-sm">
+              <button onClick={fetchReport} className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm transition-colors shadow-lg shadow-emerald-900/20">
                 <RefreshCw className="h-4 w-4" /> Refresh
               </button>
             </div>
@@ -161,51 +161,51 @@ export default function CollectionsReportPage() {
 
           {/* Stats Summary */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div className="bg-white rounded-lg shadow-sm border p-4">
-              <p className="text-xs text-gray-500">Total Certificates</p>
-              <p className="text-2xl font-bold text-gray-900">{records.length}</p>
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm p-4">
+              <p className="text-xs text-gray-500 dark:text-slate-400">Total Certificates</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">{records.length}</p>
             </div>
-            <div className="bg-white rounded-lg shadow-sm border p-4">
-              <p className="text-xs text-gray-500">Ready for Collection</p>
-              <p className="text-2xl font-bold text-green-600">{records.filter(r => r.status === 'ready_for_collection').length}</p>
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm p-4">
+              <p className="text-xs text-gray-500 dark:text-slate-400">Ready for Collection</p>
+              <p className="text-2xl font-bold text-green-600 dark:text-green-400">{records.filter(r => r.status === 'ready_for_collection').length}</p>
             </div>
-            <div className="bg-white rounded-lg shadow-sm border p-4">
-              <p className="text-xs text-gray-500">Successfully Collected</p>
-              <p className="text-2xl font-bold text-blue-600">{records.filter(r => r.status === 'collected').length}</p>
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm p-4">
+              <p className="text-xs text-gray-500 dark:text-slate-400">Successfully Collected</p>
+              <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{records.filter(r => r.status === 'collected').length}</p>
             </div>
-            <div className="bg-white rounded-lg shadow-sm border p-4">
-              <p className="text-xs text-gray-500">Filtered Results</p>
-              <p className="text-2xl font-bold text-purple-600">{filteredRecords.length}</p>
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm p-4">
+              <p className="text-xs text-gray-500 dark:text-slate-400">Filtered Results</p>
+              <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">{filteredRecords.length}</p>
             </div>
           </div>
 
           {/* Advanced Filters */}
-          <div className="bg-white rounded-lg shadow-sm border p-4 mb-6">
-            <div className="flex items-center gap-2 mb-3 text-gray-700 font-medium">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm p-4 mb-6">
+            <div className="flex items-center gap-2 mb-3 text-gray-700 dark:text-slate-300 font-medium">
               <Filter className="h-4 w-4" /> Advanced Filters & Sorting
             </div>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Search (Name/ADM/Cert)</label>
-                <input type="text" value={filters.search} onChange={(e) => setFilters({...filters, search: e.target.value})} placeholder="Search..." className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Search (Name/ADM/Cert)</label>
+                <input type="text" value={filters.search} onChange={(e) => setFilters({...filters, search: e.target.value})} placeholder="Search..." className="w-full px-3 py-2 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50" />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Certificate Status</label>
-                <select value={filters.status} onChange={(e) => setFilters({...filters, status: e.target.value})} className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Certificate Status</label>
+                <select value={filters.status} onChange={(e) => setFilters({...filters, status: e.target.value})} className="w-full px-3 py-2 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50">
                   <option value="">All Circumstances</option>
                   {uniqueStatuses.map(s => <option key={s} value={s}>{s.replace('_', ' ').toUpperCase()}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Storage Location</label>
-                <select value={filters.location} onChange={(e) => setFilters({...filters, location: e.target.value})} className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Storage Location</label>
+                <select value={filters.location} onChange={(e) => setFilters({...filters, location: e.target.value})} className="w-full px-3 py-2 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50">
                   <option value="">All Locations</option>
                   {uniqueLocations.map(l => <option key={l} value={l}>{l}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Building</label>
-                <select value={filters.building} onChange={(e) => setFilters({...filters, building: e.target.value})} className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Building</label>
+                <select value={filters.building} onChange={(e) => setFilters({...filters, building: e.target.value})} className="w-full px-3 py-2 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50">
                   <option value="">All Buildings</option>
                   {uniqueBuildings.map(b => <option key={b} value={b}>{b}</option>)}
                 </select>
@@ -214,54 +214,54 @@ export default function CollectionsReportPage() {
           </div>
 
           {/* Data Table */}
-          <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-50 border-b">
+                <thead className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-800">
                   <tr>
-                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Certificate</th>
-                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Student</th>
-                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Program</th>
-                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Physical Location</th>
-                    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase">Collection Details</th>
+                    <th className="px-3 py-4 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Certificate</th>
+                    <th className="px-3 py-4 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Student</th>
+                    <th className="px-3 py-4 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Program</th>
+                    <th className="px-3 py-4 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
+                    <th className="px-3 py-4 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Physical Location</th>
+                    <th className="px-3 py-4 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Collection Details</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y">
+                <tbody className="divide-y divide-gray-200 dark:divide-slate-800">
                   {filteredRecords.length === 0 ? (
-                    <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-500">No records match your filters</td></tr>
+                    <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-500 dark:text-slate-400">No records match your filters</td></tr>
                   ) : (
                     filteredRecords.map((r, i) => (
-                      <tr key={i} className="hover:bg-gray-50 text-sm">
-                        <td className="px-3 py-3 font-medium text-gray-900">{r.certificate_number}</td>
-                        <td className="px-3 py-3">
-                          {r.student_name}<br/>
-                          <span className="text-xs text-gray-500">{r.student_id}</span>
+                      <tr key={i} className="hover:bg-gray-50 dark:hover:bg-slate-800/30 transition-colors text-sm">
+                        <td className="px-3 py-4 font-medium text-gray-900 dark:text-white">{r.certificate_number}</td>
+                        <td className="px-3 py-4">
+                          <span className="text-gray-700 dark:text-slate-300">{r.student_name}</span><br/>
+                          <span className="text-xs text-gray-500 dark:text-slate-400">{r.student_id}</span>
                         </td>
-                        <td className="px-3 py-3 text-gray-600">{r.program}</td>
-                        <td className="px-3 py-3">
-                          <span className={`px-2 py-1 text-xs rounded-full capitalize ${getStatusColor(r.status)}`}>
+                        <td className="px-3 py-4 text-gray-600 dark:text-slate-400">{r.program}</td>
+                        <td className="px-3 py-4">
+                          <span className={`px-2.5 py-1 text-xs font-bold rounded-full capitalize ${getStatusColor(r.status)}`}>
                             {r.status.replace('_', ' ')}
                           </span>
                         </td>
-                        <td className="px-3 py-3">
-                          <div className="flex items-center gap-1 text-gray-700">
-                            <MapPin className="h-3 w-3 text-gray-400" />
+                        <td className="px-3 py-4">
+                          <div className="flex items-center gap-1 text-gray-700 dark:text-slate-300">
+                            <MapPin className="h-3 w-3 text-gray-400 dark:text-slate-500" />
                             <div>
                               <p className="font-medium">{r.storage_location}</p>
-                              <p className="text-xs text-gray-500">{r.building} {r.room && `• ${r.room}`} {r.shelf && `• ${r.shelf}`}</p>
+                              <p className="text-xs text-gray-500 dark:text-slate-400">{r.building} {r.room && `• ${r.room}`} {r.shelf && `• ${r.shelf}`}</p>
                             </div>
                           </div>
                         </td>
-                        <td className="px-3 py-3 text-gray-600">
+                        <td className="px-3 py-4 text-gray-600 dark:text-slate-400">
                           {r.status === 'collected' ? (
                             <div>
-                              <p className="text-green-700 font-medium">Collected</p>
-                              <p className="text-xs text-gray-500">{r.collection_date}</p>
-                              <p className="text-xs text-gray-500">By: {r.collected_by}</p>
+                              <p className="text-green-700 dark:text-green-400 font-medium">Collected</p>
+                              <p className="text-xs text-gray-500 dark:text-slate-400">{r.collection_date}</p>
+                              <p className="text-xs text-gray-500 dark:text-slate-400">By: {r.collected_by}</p>
                             </div>
                           ) : (
-                            <span className="text-gray-400 italic">Not yet collected</span>
+                            <span className="text-gray-400 dark:text-slate-500 italic">Not yet collected</span>
                           )}
                         </td>
                       </tr>

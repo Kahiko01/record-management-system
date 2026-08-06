@@ -23,8 +23,20 @@ export default function RegistryPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
+      // Build params object with only non-empty values
+      const params: any = {};
+      if (filters.search && filters.search.trim()) {
+        params.search = filters.search.trim();
+      }
+      if (filters.status && filters.status !== '' && filters.status !== 'All Status') {
+        params.status = filters.status;
+      }
+
+      // Only send params if there's something to filter
+      const hasParams = Object.keys(params).length > 0;
+      
       const [inventoryRes, clearedRes] = await Promise.all([
-        registryApi.getCertificates({ search: filters.search, status: filters.status }),
+        registryApi.getCertificates(hasParams ? params : undefined),
         clearanceApi.getClearedStudents(),
       ]);
       setInventory(inventoryRes.data || []);
@@ -50,7 +62,6 @@ export default function RegistryPage() {
     const file = event.target.files?.[0];
     if (!file) return;
     
-    // Handle the file upload here
     const formData = new FormData();
     formData.append('file', file);
     
@@ -74,12 +85,15 @@ export default function RegistryPage() {
     switch (status) {
       case "collected":
         return <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30">✅ Collected</span>;
+      case "ready_for_collection":
       case "ready":
         return <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400 border border-blue-200 dark:border-blue-500/30">📦 Ready</span>;
+      case "awaiting_clearance":
+        return <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-500/30">⏳ Awaiting Clearance</span>;
       case "in_storage":
         return <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400 border border-amber-200 dark:border-amber-500/30">🗄️ In Storage</span>;
       default:
-        return <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-gray-100 text-gray-700 dark:bg-slate-500/20 dark:text-slate-400 border border-gray-200 dark:border-slate-500/30">Unknown</span>;
+        return <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-gray-100 text-gray-700 dark:bg-slate-500/20 dark:text-slate-400 border border-gray-200 dark:border-slate-500/30">{status || "Unknown"}</span>;
     }
   };
 
@@ -136,19 +150,39 @@ export default function RegistryPage() {
             <div className="flex flex-col md:flex-row gap-4 items-end">
               <div className="flex-1">
                 <label className="block text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Search Name / Certificate No</label>
-                <input type="text" value={filters.search} onChange={(e) => setFilters({ ...filters, search: e.target.value })} onKeyPress={(e) => e.key === "Enter" && fetchData()} placeholder="e.g. John or CERT/2024/001" className="w-full px-4 py-2.5 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50" />
+                <input 
+                  type="text" 
+                  value={filters.search} 
+                  onChange={(e) => setFilters({ ...filters, search: e.target.value })} 
+                  onKeyPress={(e) => e.key === "Enter" && fetchData()} 
+                  placeholder="e.g. John or CERT/2024/001" 
+                  className="w-full px-4 py-2.5 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50" 
+                />
               </div>
               <div className="w-40">
                 <label className="block text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Status</label>
-                <select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })} className="w-full px-3 py-2.5 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50">
+                <select 
+                  value={filters.status} 
+                  onChange={(e) => setFilters({ ...filters, status: e.target.value })} 
+                  className="w-full px-3 py-2.5 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                >
                   <option value="">All Status</option>
-                  <option value="ready">Ready</option>
+                  <option value="awaiting_clearance">Awaiting Clearance</option>
+                  <option value="ready_for_collection">Ready for Collection</option>
                   <option value="collected">Collected</option>
                   <option value="in_storage">In Storage</option>
+                  <option value="on_hold">On Hold</option>
                 </select>
               </div>
-              <button onClick={fetchData} className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl text-sm transition-colors shadow-lg shadow-emerald-900/20">Search</button>
-              <button onClick={() => { setFilters({ search: "", status: "" }); setTimeout(fetchData, 100); }} className="px-4 py-2.5 text-sm font-medium text-rose-500 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl transition-colors">Clear</button>
+              <button onClick={fetchData} className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl text-sm transition-colors shadow-lg shadow-emerald-900/20 flex items-center gap-2">
+                <Search className="h-4 w-4" /> Search
+              </button>
+              <button 
+                onClick={() => { setFilters({ search: "", status: "" }); setTimeout(fetchData, 100); }} 
+                className="px-4 py-2.5 text-sm font-medium text-rose-500 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl transition-colors flex items-center gap-2"
+              >
+                Clear
+              </button>
             </div>
           </div>
 
@@ -174,16 +208,15 @@ export default function RegistryPage() {
                         <tr key={cert.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/30 transition-colors">
                           <td className="px-6 py-4 text-sm">
                             <p className="font-semibold text-gray-900 dark:text-white">{cert.certificate_number}</p>
-                            <p className="text-xs text-gray-500 dark:text-slate-500">Series: {cert.series}</p>
+                            <p className="text-xs text-gray-500 dark:text-slate-500">ID: {cert.id}</p>
                           </td>
                           <td className="px-6 py-4 text-sm">
-                            <p className="text-gray-700 dark:text-slate-300">{cert.student_name}</p>
-                            <p className="text-xs text-gray-500 dark:text-slate-500">{cert.student_id}</p>
+                            <p className="text-gray-700 dark:text-slate-300">{cert.student?.first_name || cert.student_name} {cert.student?.last_name || ""}</p>
+                            <p className="text-xs text-gray-500 dark:text-slate-500">{cert.student?.student_id || cert.student_id}</p>
                           </td>
-                          <td className="px-6 py-4 text-sm text-gray-700 dark:text-slate-300">{cert.course}</td>
+                          <td className="px-6 py-4 text-sm text-gray-700 dark:text-slate-300">{cert.programme || cert.course}</td>
                           <td className="px-6 py-4 text-sm">
-                            <p className="text-gray-700 dark:text-slate-300 flex items-center gap-1"><MapPin className="h-3 w-3" /> {cert.storage_location?.building || "N/A"}</p>
-                            <p className="text-xs text-gray-500 dark:text-slate-500">Room: {cert.storage_location?.room || "N/A"}, Shelf: {cert.storage_location?.shelf || "N/A"}</p>
+                            <p className="text-gray-700 dark:text-slate-300 flex items-center gap-1"><MapPin className="h-3 w-3" /> {cert.storage_location || "N/A"}</p>
                           </td>
                           <td className="px-6 py-4">{getStatusBadge(cert.status)}</td>
                         </tr>
@@ -223,11 +256,13 @@ export default function RegistryPage() {
                             <p className="text-gray-700 dark:text-slate-300">{student.program}</p>
                             <p className="text-xs text-gray-500 dark:text-slate-500">Year {student.year_of_study}</p>
                           </td>
-                          <td className="px-6 py-4 text-sm text-gray-700 dark:text-slate-300">{new Date(student.clearance_date).toLocaleDateString()}</td>
-                          <td className="px-6 py-4">{getStatusBadge(student.certificate_status || "in_storage")}</td>
+                          <td className="px-6 py-4 text-sm text-gray-700 dark:text-slate-300">{student.clearance_date ? new Date(student.clearance_date).toLocaleDateString() : "N/A"}</td>
+                          <td className="px-6 py-4">{getStatusBadge(student.certificate_status || "awaiting_clearance")}</td>
                           <td className="px-6 py-4">
-                            {hasPermission(Permission.REGISTRY_MANAGE) && student.certificate_status !== "collected" && (
-                              <button onClick={() => handleMarkReady(student.id)} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-colors">Mark Ready</button>
+                            {hasPermission(Permission.REGISTRY_MARK_AVAILABLE) && student.certificate_status !== "collected" && (
+                              <button onClick={() => handleMarkReady(student.id)} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-colors">
+                                Mark Ready
+                              </button>
                             )}
                           </td>
                         </tr>

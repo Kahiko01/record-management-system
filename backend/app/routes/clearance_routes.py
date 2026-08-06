@@ -9,7 +9,8 @@ from ..models.models import (
     ExaminationClearance, RegistryInventory, CollectionAppointment,
     CertificateCollection, Notification, AuditLog,
     ClearanceStatus, CertificateStatus, AppointmentStatus,
-    NotificationType, CollectionMethod, AcademicClearance, DeanApproval
+    NotificationType, CollectionMethod, AcademicClearance, DeanApproval,
+    StorageLocation
 )
 from ..schemas.schemas import (
     ClearanceRequestCreate, ClearanceRequestResponse,
@@ -216,9 +217,8 @@ async def update_dean_clearance(
     db.add(notification); db.commit()
     return {"message": f"Dean clearance updated to {status_str}", "clearance_id": clearance_id}
 
-
 # ========================================
-# FINANCE PAYMENT BULK UPLOAD
+# FINANCE PAYMENT BULK UPLOAD (AUTO-CLEAR ENABLED)
 # ========================================
 
 class PaymentImportItem(BaseModel):
@@ -232,9 +232,10 @@ async def bulk_upload_payments(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission(Permission.FINANCE_VIEW_PENDING))
 ):
-    """Bulk upload payment data from Excel. Updates or creates FinanceClearance records."""
+    """Bulk upload payment data from Excel. AUTO-CLEARS if balance <= 0."""
     updated_count = 0
     created_count = 0
+    auto_cleared_count = 0
     errors = []
 
     for item in payments_data:
@@ -249,9 +250,7 @@ async def bulk_upload_payments(
             clearance = db.query(ClearanceRequest).filter(ClearanceRequest.student_id == student.id).first()
             if not clearance:
                 clearance = ClearanceRequest(
-                    student_id=student.id,
-                    student_user_id=student.user_id,
-                    overall_status="pending"
+                    student_id=student.id, student_user_id=student.user_id, overall_status="pending"
                 )
                 db.add(clearance)
                 db.commit()
@@ -259,24 +258,69 @@ async def bulk_upload_payments(
 
             # Find or create FinanceClearance
             finance = db.query(FinanceClearance).filter(FinanceClearance.clearance_request_id == clearance.id).first()
-
             outstanding = item.amount_due - item.amount_paid
+            
+            # 🚨 THE MAGIC AUTO-CLEAR LOGIC 🚨
+            auto_cleared = outstanding <= 0
 
             if finance:
                 finance.amount_due = item.amount_due
                 finance.amount_paid = item.amount_paid
                 finance.outstanding_balance = outstanding
+                
+                # If balance is 0 or less, auto-approve!
+                if auto_cleared and finance.status != ClearanceStatus.CLEARED:
+                    finance.status = ClearanceStatus.CLEARED
+                    finance.cleared_at = datetime.utcnow()
+                    finance.cleared_by = current_user.id
+                    auto_cleared_count += 1
+                    
+                    # Send Notification to student
+                    notification = Notification(
+                        student_id=student.id, sender_id=current_user.id, 
+                        notification_type=NotificationType.CLEARANCE_REQUEST, 
+                        title="Finance Auto-Cleared ✅", 
+                        message=f"Congratulations! Your finance clearance was automatically approved because your fee balance is fully paid."
+                    )
+                    db.add(notification)
+                elif not auto_cleared and finance.status == ClearanceStatus.CLEARED:
+                    # If they owe money again, revoke clearance
+                    finance.status = ClearanceStatus.PENDING 
+                
                 updated_count += 1
             else:
                 new_finance = FinanceClearance(
                     clearance_request_id=clearance.id,
-                    status=ClearanceStatus.PENDING,
+                    status=ClearanceStatus.CLEARED if auto_cleared else ClearanceStatus.PENDING,
                     amount_due=item.amount_due,
                     amount_paid=item.amount_paid,
-                    outstanding_balance=outstanding
+                    outstanding_balance=outstanding,
+                    cleared_at=datetime.utcnow() if auto_cleared else None,
+                    cleared_by=current_user.id if auto_cleared else None
                 )
                 db.add(new_finance)
                 created_count += 1
+                
+                if auto_cleared:
+                    auto_cleared_count += 1
+                    notification = Notification(
+                        student_id=student.id, sender_id=current_user.id, 
+                        notification_type=NotificationType.CLEARANCE_REQUEST, 
+                        title="Finance Auto-Cleared ✅", 
+                        message=f"Congratulations! Your finance clearance was automatically approved because your fee balance is fully paid."
+                    )
+                    db.add(notification)
+            
+            # Update overall clearance status if Finance just got auto-cleared
+            if auto_cleared:
+                exam = db.query(ExaminationClearance).filter(ExaminationClearance.clearance_request_id == clearance.id).first()
+                exam_status_str = exam.status.value if exam and hasattr(exam.status, 'value') else "pending"
+                
+                if exam_status_str == "cleared":
+                    clearance.overall_status = "cleared"
+                    clearance.collection_eligible = True
+                else:
+                    clearance.overall_status = "in_progress"
 
             db.commit()
 
@@ -284,12 +328,13 @@ async def bulk_upload_payments(
             errors.append(f"Row {item.student_id}: {str(e)}")
 
     await log_audit(db, current_user.id, "PAYMENTS_BULK_UPLOADED", "finance",
-                    f"Uploaded payments: {updated_count} updated, {created_count} created")
+                    f"Uploaded payments: {updated_count} updated, {created_count} created, {auto_cleared_count} AUTO-CLEARED.")
 
     return {
-        "message": "Payment upload completed",
+        "message": f"Upload complete! {auto_cleared_count} students auto-cleared.",
         "updated": updated_count,
         "created": created_count,
+        "auto_cleared": auto_cleared_count,
         "errors": errors
     }
 
@@ -569,6 +614,7 @@ async def mark_notification_read(
     notification.is_read = True
     db.commit()
     return {"message": "Notification marked as read"}
+
 # ========================================
 # CLEARANCE OVERVIEW (FOR SYSTEM USERS)
 # ========================================
@@ -589,22 +635,22 @@ async def get_clearance_overview(
     result = []
     for student in students:
         clearance = db.query(ClearanceRequest).filter(ClearanceRequest.student_id == student.id).first()
-        
+
         finance_status = "no_request"
         exam_status = "no_request"
         dean_status = "no_request"
         overall_status = "no_request"
-        
+
         if clearance:
             overall_status = clearance.overall_status or "pending"
             finance = db.query(FinanceClearance).filter(FinanceClearance.clearance_request_id == clearance.id).first()
             exam = db.query(ExaminationClearance).filter(ExaminationClearance.clearance_request_id == clearance.id).first()
             dean = db.query(DeanApproval).filter(DeanApproval.clearance_request_id == clearance.id).first()
-            
+
             finance_status = finance.status.value if finance and hasattr(finance.status, 'value') else (str(finance.status) if finance else "pending")
             exam_status = exam.status.value if exam and hasattr(exam.status, 'value') else (str(exam.status) if exam else "pending")
             dean_status = dean.status.value if dean and hasattr(dean.status, 'value') else (str(dean.status) if dean else "pending")
-            
+
         result.append({
             "id": student.id,
             "student_id": student.student_id,
