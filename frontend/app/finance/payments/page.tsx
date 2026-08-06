@@ -35,13 +35,89 @@ export default function FinancePaymentsPage() {
   };
 
   const parseFile = async (selectedFile: File) => {
-    // In a real app, use a library like 'xlsx' or 'papaparse' to parse the file here.
-    // For this UI demo, we will simulate parsed data so you can see the preview table.
-    setPreviewData([
-      { student_id: "STU-2024-001", amount_due: 50000, amount_paid: 50000 },
-      { student_id: "STU-2024-002", amount_due: 45000, amount_paid: 20000 },
-      { student_id: "STU-2024-003", amount_due: 60000, amount_paid: 60000 },
-    ]);
+    try {
+      const text = await selectedFile.text();
+      const lines = text.trim().split(/\r?\n/);
+      
+      if (lines.length < 2) {
+        alert("File appears to be empty or has only headers.");
+        return;
+      }
+
+      // Parse headers and remove quotes
+      const headers = lines[0].split(",").map(h => h.trim().replace(/^"(.*)"$/, '$1').toLowerCase());
+      
+      const rows: any[] = [];
+      const errors: string[] = [];
+      
+      for (let i = 1; i < lines.length; i++) {
+        if (!lines[i].trim()) continue; // Skip empty lines
+        
+        // Simple CSV parsing that handles basic quotes
+        const cols = lines[i].split(",").map(c => c.trim().replace(/^"(.*)"$/, '$1'));
+        
+        if (cols.length < 3) {
+          errors.push(`Line ${i + 1}: Not enough columns`);
+          continue;
+        }
+
+        const row: any = {};
+        headers.forEach((h, idx) => { 
+          row[h] = cols[idx] || ""; 
+        });
+        
+        const studentId = row.student_id;
+        const amountDue = parseFloat(row.amount_due);
+        const amountPaid = parseFloat(row.amount_paid);
+
+        if (!studentId) {
+          errors.push(`Line ${i + 1}: Missing student_id`);
+          continue;
+        }
+        
+        if (isNaN(amountDue) || isNaN(amountPaid)) {
+          errors.push(`Line ${i + 1}: Invalid amounts for ${studentId}`);
+          continue;
+        }
+
+        rows.push({
+          student_id: studentId,
+          amount_due: amountDue,
+          amount_paid: amountPaid,
+        });
+      }
+      
+      if (rows.length === 0) {
+        alert("No valid rows found. Please check your CSV format.\n\nErrors:\n" + errors.slice(0, 5).join("\n"));
+        return;
+      }
+      
+      setPreviewData(rows);
+      
+      if (errors.length > 0) {
+        alert(`Parsed ${rows.length} rows with ${errors.length} warnings:\n${errors.slice(0, 3).join("\n")}`);
+      }
+    } catch (error) {
+      console.error("Parse error:", error);
+      alert("Could not read the file. Please use a .CSV file with proper formatting.");
+    }
+  };
+
+  const downloadTemplate = () => {
+    const csv = `student_id,amount_due,amount_paid
+# Replace the student IDs below with REAL student IDs from your system
+# Example real IDs might look like: ADM/2024/001 or 2024001 depending on your format
+ADM/2024/001,50000,50000
+ADM/2024/002,45000,20000
+ADM/2024/003,60000,60000`;
+    
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "payment_template.csv";
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleUpload = async () => {
@@ -68,7 +144,7 @@ export default function FinancePaymentsPage() {
       <div className="flex">
         <Sidebar />
         <div className="flex-1 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          
+
           {/* Header */}
           <div className="mb-8">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
@@ -78,19 +154,19 @@ export default function FinancePaymentsPage() {
           </div>
 
           {/* Drag & Drop Upload Zone */}
-          <div 
+          <div
             onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
             onDragLeave={() => setIsDragging(false)}
             onDrop={handleDrop}
             className={`bg-white dark:bg-slate-900 rounded-2xl border-2 border-dashed p-8 mb-6 transition-all cursor-pointer ${isDragging ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/10' : 'border-gray-300 dark:border-slate-700 hover:border-emerald-400 dark:hover:border-emerald-500'}`}
             onClick={() => fileInputRef.current?.click()}
           >
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              onChange={handleFileChange} 
-              accept=".csv,.xlsx,.xls" 
-              className="hidden" 
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              accept=".csv,.xlsx,.xls"
+              className="hidden"
             />
             <div className="flex flex-col items-center justify-center text-center">
               <div className={`p-4 rounded-full mb-4 transition-colors ${isDragging ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-gray-100 dark:bg-slate-800'}`}>
@@ -103,7 +179,7 @@ export default function FinancePaymentsPage() {
                 Supports .CSV, .XLSX, .XLS (Max 10MB)
               </p>
               {file && (
-                <button 
+                <button
                   onClick={(e) => { e.stopPropagation(); setFile(null); setPreviewData([]); if(fileInputRef.current) fileInputRef.current.value = ""; }}
                   className="mt-4 px-3 py-1.5 text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 hover:bg-rose-100 dark:hover:bg-rose-900/40 rounded-lg transition-colors"
                 >
@@ -142,7 +218,7 @@ export default function FinancePaymentsPage() {
                 </table>
               </div>
               <div className="px-6 py-4 border-t border-gray-200 dark:border-slate-800 flex justify-end">
-                <button 
+                <button
                   onClick={handleUpload}
                   disabled={uploading || !hasPermission(Permission.FINANCE_APPROVE)}
                   className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl text-sm transition-colors shadow-lg shadow-emerald-900/20 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -170,6 +246,9 @@ export default function FinancePaymentsPage() {
                     <div className="flex gap-4 mt-2 text-xs font-medium">
                       <span className="text-emerald-700 dark:text-emerald-400">✅ {uploadResult.updated} Updated</span>
                       <span className="text-blue-700 dark:text-blue-400">➕ {uploadResult.created} Created</span>
+                      {uploadResult.auto_cleared !== undefined && (
+                        <span className="text-purple-700 dark:text-purple-400">🚀 {uploadResult.auto_cleared} Auto-Cleared</span>
+                      )}
                     </div>
                   )}
                   {uploadResult.errors && uploadResult.errors.length > 0 && (
@@ -189,7 +268,15 @@ export default function FinancePaymentsPage() {
 
           {/* Instructions Box */}
           <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-2xl p-5">
-            <h3 className="text-sm font-bold text-blue-900 dark:text-blue-300 mb-2">📋 File Format Instructions</h3>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-bold text-blue-900 dark:text-blue-300">📋 File Format Instructions</h3>
+              <button
+                onClick={downloadTemplate}
+                className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-colors"
+              >
+                ⬇️ Download CSV Template
+              </button>
+            </div>
             <p className="text-xs text-blue-800 dark:text-blue-400 mb-2">Your Excel or CSV file must contain the following exact column headers:</p>
             <ul className="text-xs text-blue-700 dark:text-blue-300 space-y-1 list-disc list-inside">
               <li><code className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/30 rounded text-[10px] font-mono">student_id</code> (e.g., STU-2024-001)</li>
