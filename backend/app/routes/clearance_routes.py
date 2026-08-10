@@ -21,6 +21,7 @@ from ..schemas.schemas import (
 )
 from ..auth.auth import get_current_active_user
 from ..core.permissions import require_permission, require_any_permission, Permission
+from ..core.websocket_manager import manager
 from ..utils.audit import log_audit
 
 router = APIRouter(prefix="/clearance", tags=["Clearance"])
@@ -80,44 +81,61 @@ async def get_finance_pending(
     result = []
     for student in students:
         clearance = db.query(ClearanceRequest).filter(ClearanceRequest.student_id == student.id).first()
-        finance_status = "pending"
-        if clearance:
-            finance = db.query(FinanceClearance).filter(FinanceClearance.clearance_request_id == clearance.id).first()
-            if finance: finance_status = finance.status.value if hasattr(finance.status, 'value') else str(finance.status)
-        if finance_status in ["pending", "not_cleared"]:
-            result.append({"id": student.id, "student_id": student.id, "student_user_id": clearance.student_user_id if clearance else None, "request_date": clearance.request_date.isoformat() if clearance else None, "overall_status": clearance.overall_status if clearance else "not_applied", "collection_eligible": clearance.collection_eligible if clearance else False, "student": {"id": student.id, "student_id": student.student_id, "first_name": student.first_name, "last_name": student.last_name, "program": student.program, "year_of_study": student.year_of_study, "email": student.email, "user_id": student.user_id}, "finance_clearance": {"status": finance_status} if finance_status else None})
+        if not clearance:
+            continue
+        finance = db.query(FinanceClearance).filter(FinanceClearance.clearance_request_id == clearance.id).first()
+        if not finance:
+            continue
+        finance_status = finance.status.value if hasattr(finance.status, 'value') else str(finance.status)
+        if finance_status.upper() in ["PENDING", "NOT_CLEARED"]:
+            result.append({
+                "id": finance.id,
+                "clearance_request_id": clearance.id,
+                "student_id": student.id,
+                "request_date": clearance.request_date.isoformat() if clearance.request_date else None,
+                "overall_status": clearance.overall_status,
+                "amount_due": finance.amount_due or 0,
+                "amount_paid": finance.amount_paid or 0,
+                "status": finance_status,
+                "student": {
+                    "id": student.id,
+                    "student_id": student.student_id,
+                    "first_name": student.first_name,
+                    "last_name": student.last_name,
+                    "program": student.program,
+                    "year_of_study": student.year_of_study,
+                    "email": student.email,
+                    "user_id": student.user_id
+                }
+            })
     return result
 
-@router.put("/finance/{clearance_id}")
+@router.put("/finance/{finance_id}")
 async def update_finance_clearance(
-    clearance_id: int, update_data: dict, db: Session = Depends(get_db),
+    finance_id: int, update_data: dict, db: Session = Depends(get_db),
     current_user: User = Depends(require_permission(Permission.FINANCE_APPROVE))
 ):
-    finance = db.query(FinanceClearance).filter(FinanceClearance.clearance_request_id == clearance_id).first()
+    finance = db.query(FinanceClearance).filter(FinanceClearance.id == finance_id).first()
     if not finance: raise HTTPException(status_code=404, detail="Finance clearance not found")
     status_str = update_data.get("status", "pending")
     remarks = update_data.get("remarks", "")
-    if status_str == "cleared": finance.status = ClearanceStatus.CLEARED
-    elif status_str == "not_cleared": finance.status = ClearanceStatus.NOT_CLEARED
-    finance.cleared_by = current_user.id; finance.cleared_at = datetime.utcnow()
-    db.commit(); db.refresh(finance)
-    clearance = db.query(ClearanceRequest).filter(ClearanceRequest.id == clearance_id).first()
-    exam = db.query(ExaminationClearance).filter(ExaminationClearance.clearance_request_id == clearance_id).first()
-    finance_status_str = finance.status.value if hasattr(finance.status, 'value') else str(finance.status)
-    exam_status_str = exam.status.value if hasattr(exam.status, 'value') else str(exam.status) if exam else "pending"
-    if finance_status_str == "cleared" and exam_status_str == "cleared":
-        clearance.overall_status = "cleared"; clearance.collection_eligible = True; clearance.collection_eligible_date = datetime.utcnow()
-    elif finance_status_str == "not_cleared" or exam_status_str == "not_cleared":
-        clearance.overall_status = "rejected"; clearance.collection_eligible = False
-    else: clearance.overall_status = "in_progress"
+
+    # Update the finance status
+    finance.status = status_str
     db.commit()
-    checklist_items = [f"{key.replace('_', ' ').title()}: {'Yes' if value else 'No'}" for key, value in update_data.items() if isinstance(value, bool)]
-    audit_details = f"Status: {status_str}. Remarks: {remarks or 'None'}. Checklist: [{', '.join(checklist_items)}]"
-    await log_audit(db, current_user.id, "FINANCE_CLEARANCE_UPDATED", "finance", audit_details)
-    msg = "Your Finance clearance has been approved." if status_str == "cleared" else f"Your Finance clearance was rejected. Reason: {remarks}"
-    notification = Notification(student_id=clearance.student_id, sender_id=current_user.id, notification_type=NotificationType.CLEARANCE_REQUEST, title="Finance Clearance Update", message=msg)
-    db.add(notification); db.commit()
-    return finance
+
+    # Log the action
+    await log_audit(db, current_user.id, "FINANCE_CLEARANCE_UPDATED", "finance", f"Status: {status_str}. Remarks: {remarks or 'None'}")
+
+    # Send notification to student
+    clearance = db.query(ClearanceRequest).filter(ClearanceRequest.id == finance.clearance_request_id).first()
+    if clearance:
+        msg = "Your Finance clearance has been approved." if status_str == "cleared" else f"Your Finance clearance was rejected. Reason: {remarks}"
+        notification = Notification(student_id=clearance.student_id, sender_id=current_user.id, notification_type=NotificationType.CLEARANCE_REQUEST, title="Finance Clearance Update", message=msg)
+        db.add(notification)
+        db.commit()
+
+    return {"message": f"Finance clearance updated to {status_str}", "finance_id": finance_id}
 
 # ========================================
 # 3. EXAMINATIONS OFFICE REVIEWS
@@ -240,13 +258,11 @@ async def bulk_upload_payments(
 
     for item in payments_data:
         try:
-            # Find student by ADM No
             student = db.query(Student).filter(Student.student_id == item.student_id).first()
             if not student:
                 errors.append(f"Student {item.student_id} not found")
                 continue
 
-            # Find or create ClearanceRequest
             clearance = db.query(ClearanceRequest).filter(ClearanceRequest.student_id == student.id).first()
             if not clearance:
                 clearance = ClearanceRequest(
@@ -256,11 +272,8 @@ async def bulk_upload_payments(
                 db.commit()
                 db.refresh(clearance)
 
-            # Find or create FinanceClearance
             finance = db.query(FinanceClearance).filter(FinanceClearance.clearance_request_id == clearance.id).first()
             outstanding = item.amount_due - item.amount_paid
-
-            # 🚨 THE MAGIC AUTO-CLEAR LOGIC 🚨
             auto_cleared = outstanding <= 0
 
             if finance:
@@ -268,14 +281,12 @@ async def bulk_upload_payments(
                 finance.amount_paid = item.amount_paid
                 finance.outstanding_balance = outstanding
 
-                # If balance is 0 or less, auto-approve!
                 if auto_cleared and finance.status != ClearanceStatus.CLEARED:
                     finance.status = ClearanceStatus.CLEARED
                     finance.cleared_at = datetime.utcnow()
                     finance.cleared_by = current_user.id
                     auto_cleared_count += 1
 
-                    # Send Notification to student
                     notification = Notification(
                         student_id=student.id, sender_id=current_user.id,
                         notification_type=NotificationType.CLEARANCE_REQUEST,
@@ -284,7 +295,6 @@ async def bulk_upload_payments(
                     )
                     db.add(notification)
                 elif not auto_cleared and finance.status == ClearanceStatus.CLEARED:
-                    # If they owe money again, revoke clearance
                     finance.status = ClearanceStatus.PENDING
 
                 updated_count += 1
@@ -311,7 +321,6 @@ async def bulk_upload_payments(
                     )
                     db.add(notification)
 
-            # Update overall clearance status if Finance just got auto-cleared
             if auto_cleared:
                 exam = db.query(ExaminationClearance).filter(ExaminationClearance.clearance_request_id == clearance.id).first()
                 exam_status_str = exam.status.value if exam and hasattr(exam.status, 'value') else "pending"
@@ -339,7 +348,7 @@ async def bulk_upload_payments(
     }
 
 # ========================================
-# 4. FEE BALANCE ENDPOINTS (NEW!)
+# 4. FEE BALANCE ENDPOINTS
 # ========================================
 
 @router.get("/finance/balances")
@@ -434,24 +443,20 @@ async def create_certificate_inventory(
     await log_audit(db, current_user.id, "CERTIFICATE_ADDED_TO_INVENTORY", "registry", f"Added certificate {inventory.certificate_number} to inventory")
     return db_inventory
 
-# 🚀 NEW SUPERCHARGED FUNCTION - Auto-creates certificate if it doesn't exist
 @router.put("/registry/mark-ready/{student_id}", response_model=RegistryInventoryResponse)
 async def mark_certificate_ready(
     student_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_permission(Permission.REGISTRY_MARK_AVAILABLE))
 ):
-    # 1. Check if student exists and is fully cleared
     student = db.query(Student).filter(Student.id == student_id).first()
     if not student: raise HTTPException(status_code=404, detail="Student not found")
-    
+
     clearance = db.query(ClearanceRequest).filter(ClearanceRequest.student_id == student.id).first()
-    if not clearance or clearance.overall_status != "cleared": 
+    if not clearance or clearance.overall_status != "cleared":
         raise HTTPException(status_code=400, detail="Student is not fully cleared yet")
 
-    # 2. Find or create the RegistryInventory record
     certificate = db.query(RegistryInventory).filter(RegistryInventory.student_id == student.id).first()
-    
+
     if not certificate:
-        # 🪄 MAGIC: Auto-create the inventory record if it doesn't exist yet!
         cert_num = f"CERT-{student.student_id}-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
         certificate = RegistryInventory(
             certificate_number=cert_num,
@@ -465,17 +470,26 @@ async def mark_certificate_ready(
         db.refresh(certificate)
         await log_audit(db, current_user.id, "CERTIFICATE_AUTO_ADDED", "registry", f"Auto-added certificate {cert_num} to inventory")
 
-    # 3. Mark as Ready
     certificate.status = CertificateStatus.READY_FOR_COLLECTION
     certificate.marked_available_by = current_user.id
     certificate.marked_available_at = datetime.utcnow()
     db.commit(); db.refresh(certificate)
-    
-    # 4. Send Notification
+
     notification = Notification(student_id=certificate.student_id, sender_id=current_user.id, notification_type=NotificationType.CLEARANCE_REQUEST, title="Certificate Ready for Collection", message="Your certificate is now ready for collection at the Registry office.")
     db.add(notification); db.commit()
-    
+
     await log_audit(db, current_user.id, "CERTIFICATE_MARKED_READY", "registry", f"Marked certificate {certificate.certificate_number} as ready for collection")
+
+    await manager.broadcast_to_role("admin", {
+        "type": "CERTIFICATE_READY",
+        "message": f"Certificate for {student.first_name} {student.last_name} is ready for collection!"
+    })
+
+    await manager.broadcast_to_role("student", {
+        "type": "CERTIFICATE_READY",
+        "message": "Your certificate is ready for collection!"
+    })
+
     return certificate
 
 # ========================================
@@ -532,7 +546,7 @@ async def get_audit_logs(
 @router.get("/stats/dashboard", response_model=ClearanceStatsResponse)
 async def get_dashboard_stats(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)  # <--- FIXED: Any logged-in user can see the dashboard
+    current_user: User = Depends(get_current_active_user)
 ):
     return ClearanceStatsResponse(
         total_students=db.query(Student).count(),
@@ -596,17 +610,14 @@ async def get_my_notifications(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    # Find the student profile linked to the logged-in user
     student = db.query(Student).filter(Student.user_id == current_user.id).first()
     if not student:
-        return [] # Return empty list if user is not a student (e.g., Admin)
+        return []
 
-    # Fetch all notifications for this student, newest first
     notifications = db.query(Notification).filter(
         Notification.student_id == student.id
     ).order_by(Notification.created_at.desc()).all()
 
-    # Format the data so the frontend can read it easily
     result = []
     for n in notifications:
         result.append({
@@ -630,7 +641,6 @@ async def mark_notification_read(
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
 
-    # Find the specific notification and ensure it belongs to this student
     notification = db.query(Notification).filter(
         Notification.id == notification_id,
         Notification.student_id == student.id
@@ -639,7 +649,6 @@ async def mark_notification_read(
     if not notification:
         raise HTTPException(status_code=404, detail="Notification not found")
 
-    # Mark it as read in the database
     notification.is_read = True
     db.commit()
     return {"message": "Notification marked as read"}

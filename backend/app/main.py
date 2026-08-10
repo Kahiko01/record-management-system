@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 
 # Use relative imports (with .) for modules within the app
 from .core.database import engine, get_db, Base
+from .core.websocket_manager import manager
 from .models import models
 from .routes import (
     auth_routes,
@@ -80,18 +81,18 @@ async def mark_certificate_ready(
 ):
     """Mark a certificate as ready for collection"""
     from .models.models import RegistryInventory
-    
+
     certificate = db.query(RegistryInventory).filter(
         RegistryInventory.id == certificate_id
     ).first()
-    
+
     if not certificate:
         raise HTTPException(status_code=404, detail="Certificate not found")
-    
+
     # Update the status
     certificate.status = "ready_for_collection"
     db.commit()
-    
+
     return {"message": "Certificate marked as ready"}
 
 # ============================================
@@ -109,6 +110,19 @@ async def root():
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+
+# ============================================
+# WEBSOCKET ENDPOINT FOR REAL-TIME UPDATES
+# ============================================
+@app.websocket("/ws/{role}")
+async def websocket_endpoint(websocket: WebSocket, role: str):
+    await manager.connect(websocket, role)
+    try:
+        while True:
+            # Keep the connection alive by waiting for messages
+            data = await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket, role)
 
 @app.post("/seed-admin")
 async def seed_admin(db: Session = Depends(get_db)):

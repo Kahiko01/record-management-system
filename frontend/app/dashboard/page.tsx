@@ -6,6 +6,7 @@ import Sidebar from "../components/Sidebar";
 import { useAuth } from "../context/AuthContext";
 import { clearanceApi } from "../lib/api";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import PremiumKPICard from "../components/PremiumKPICard";
 import {
   Users,
   CheckCircle2,
@@ -135,12 +136,12 @@ export default function DashboardPage() {
 
   // 🛡️ ENTERPRISE AUTHORIZATION: Filter data by logged-in user's role
   const getVisibleActivity = () => {
-    if (isAdmin() || isAuditor()) return allActivity; // Super Admins & Auditors see everything
+    if (isAdmin() || isAuditor()) return allActivity;
     if (isFinance()) return allActivity.filter(a => a.dept === 'finance');
     if (isExamination()) return allActivity.filter(a => a.dept === 'examination');
     if (isDean()) return allActivity.filter(a => a.dept === 'dean');
     if (isRegistry()) return allActivity.filter(a => a.dept === 'registry');
-    return []; // Students see no internal staff activity
+    return [];
   };
   const visibleActivity = getVisibleActivity();
 
@@ -168,7 +169,6 @@ export default function DashboardPage() {
 
           {/* WELCOME HERO BANNER */}
           <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200/80 dark:border-slate-800 mb-8 relative overflow-hidden">
-            {/* Top Emerald Accent Line */}
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-600 via-amber-500 to-emerald-700" />
 
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -212,7 +212,6 @@ export default function DashboardPage() {
 
           {/* 🚀 ENTERPRISE UPGRADE: CHARTS & LIVE FEED (Visible to all roles) */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-            {/* Time-Series Chart (Clearance Velocity) */}
             <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-sm">
               <div className="flex items-center justify-between mb-6">
                 <div>
@@ -229,14 +228,14 @@ export default function DashboardPage() {
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" className="dark:opacity-10" vertical={false} />
                     <XAxis dataKey="day" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
                     <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
-                    <Tooltip 
-                      contentStyle={{ 
-                        backgroundColor: "#0f172a", 
-                        border: "1px solid #334155", 
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "#0f172a",
+                        border: "1px solid #334155",
                         borderRadius: "12px",
                         color: "#f8fafc",
                         boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.3)"
-                      }} 
+                      }}
                     />
                     <Line type="monotone" dataKey="cleared" stroke="#10b981" strokeWidth={3} dot={{ r: 4, fill: "#10b981", strokeWidth: 2, stroke: "#fff" }} activeDot={{ r: 6 }} />
                     <Line type="monotone" dataKey="pending" stroke="#f59e0b" strokeWidth={3} dot={{ r: 4, fill: "#f59e0b", strokeWidth: 2, stroke: "#fff" }} activeDot={{ r: 6 }} strokeDasharray="5 5" />
@@ -245,7 +244,6 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Live Activity Feed (Role-Filtered) */}
             <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-sm">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-base font-bold text-slate-900 dark:text-white">Live Activity</h3>
@@ -258,7 +256,7 @@ export default function DashboardPage() {
                   visibleActivity.map((activity) => (
                     <div key={activity.id} className="flex items-start gap-3 pb-4 border-b border-slate-100 dark:border-slate-800 last:border-0 last:pb-0">
                       <div className={`mt-1.5 w-2 h-2 rounded-full flex-shrink-0 ${
-                        activity.type === 'success' ? 'bg-emerald-500' : 
+                        activity.type === 'success' ? 'bg-emerald-500' :
                         activity.type === 'warning' ? 'bg-amber-500' : 'bg-blue-500'
                       }`} />
                       <div className="flex-1 min-w-0">
@@ -278,243 +276,96 @@ export default function DashboardPage() {
           {/* STUDENT DASHBOARD */}
           {isStudent() && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-              <KPICard
-                title="Clearance Status"
-                value="Pending Review"
-                subtitle="Application submitted & awaiting verification"
-                icon={Clock}
-                badgeText="In Progress"
-                badgeType="amber"
-              />
-              <KPICard
-                title="Degree Certificate"
-                value="Not Ready"
-                subtitle="Issued upon final clearance completion"
-                icon={Award}
-                badgeText="Locked"
-                badgeType="rose"
-              />
-              <KPICard
-                title="Notifications"
-                value="0 New Alerts"
-                subtitle="All department updates will appear here"
-                icon={FileText}
-                badgeText="Up to date"
-                badgeType="emerald"
-              />
+              <KPICard title="Clearance Status" value="Pending Review" subtitle="Application submitted & awaiting verification" icon={Clock} badgeText="In Progress" badgeType="amber" />
+              <KPICard title="Degree Certificate" value="Not Ready" subtitle="Issued upon final clearance completion" icon={Award} badgeText="Locked" badgeType="rose" />
+              <KPICard title="Notifications" value="0 New Alerts" subtitle="All department updates will appear here" icon={FileText} badgeText="Up to date" badgeType="emerald" />
             </div>
           )}
 
           {/* FINANCE OFFICER */}
           {isFinance() && stats && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              <KPICard
-                title="Pending Review"
-                value={stats.finance_pending || 0}
-                subtitle="Requests requiring settlement audit"
-                icon={Clock}
-                badgeText="Action Required"
-                badgeType="amber"
-              />
-              <KPICard
-                title="Cleared Requests"
-                value={stats.finance_cleared || 0}
-                subtitle="Successfully approved applications"
-                icon={CheckCircle2}
-                badgeText="Approved"
-                badgeType="emerald"
-              />
-              <KPICard
-                title="Rejected Requests"
-                value={stats.finance_not_cleared || 0}
-                subtitle="Withheld due to fee arrears"
-                icon={XCircle}
-                badgeText="Withheld"
-                badgeType="rose"
-              />
-              <KPICard
-                title="Total Enrolled"
-                value={stats.total_students || 0}
-                subtitle="Student directory database"
-                icon={Users}
-                badgeText="Database Total"
-                badgeType="blue"
-              />
+              <KPICard title="Pending Review" value={stats.finance_pending || 0} subtitle="Requests requiring settlement audit" icon={Clock} badgeText="Action Required" badgeType="amber" />
+              <KPICard title="Cleared Requests" value={stats.finance_cleared || 0} subtitle="Successfully approved applications" icon={CheckCircle2} badgeText="Approved" badgeType="emerald" />
+              <KPICard title="Rejected Requests" value={stats.finance_not_cleared || 0} subtitle="Withheld due to fee arrears" icon={XCircle} badgeText="Withheld" badgeType="rose" />
+              <KPICard title="Total Enrolled" value={stats.total_students || 0} subtitle="Student directory database" icon={Users} badgeText="Database Total" badgeType="blue" />
             </div>
           )}
 
           {/* EXAMINATION OFFICE */}
           {isExamination() && stats && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              <KPICard
-                title="Pending Audits"
-                value={stats.examination_pending || 0}
-                subtitle="Academic transcripts awaiting signoff"
-                icon={Clock}
-                badgeText="Queue Active"
-                badgeType="amber"
-              />
-              <KPICard
-                title="Academically Cleared"
-                value={stats.examination_cleared || 0}
-                subtitle="Verified for graduation"
-                icon={CheckCircle2}
-                badgeText="Verified"
-                badgeType="emerald"
-              />
-              <KPICard
-                title="Academic Holds"
-                value={stats.examination_not_cleared || 0}
-                subtitle="Pending course unit requirements"
-                icon={XCircle}
-                badgeText="On Hold"
-                badgeType="rose"
-              />
-              <KPICard
-                title="Total Candidates"
-                value={stats.total_students || 0}
-                subtitle="Exam roster database"
-                icon={GraduationCap}
-                badgeText="Roster Total"
-                badgeType="purple"
-              />
+              <KPICard title="Pending Audits" value={stats.examination_pending || 0} subtitle="Academic transcripts awaiting signoff" icon={Clock} badgeText="Queue Active" badgeType="amber" />
+              <KPICard title="Academically Cleared" value={stats.examination_cleared || 0} subtitle="Verified for graduation" icon={CheckCircle2} badgeText="Verified" badgeType="emerald" />
+              <KPICard title="Academic Holds" value={stats.examination_not_cleared || 0} subtitle="Pending course unit requirements" icon={XCircle} badgeText="On Hold" badgeType="rose" />
+              <KPICard title="Total Candidates" value={stats.total_students || 0} subtitle="Exam roster database" icon={GraduationCap} badgeText="Roster Total" badgeType="purple" />
             </div>
           )}
 
           {/* DEAN */}
           {isDean() && stats && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-              <KPICard
-                title="Pending Faculty Reviews"
-                value={stats.pending_clearance || 0}
-                subtitle="Faculty queue awaiting review"
-                icon={Clock}
-                badgeText="Pending Signoff"
-                badgeType="purple"
-              />
-              <KPICard
-                title="Clearances In Progress"
-                value={stats.in_progress_clearance || 0}
-                subtitle="Active cross-department clearance"
-                icon={TrendingUp}
-                badgeText="Processing"
-                badgeType="amber"
-              />
-              <KPICard
-                title="Fully Cleared Students"
-                value={stats.cleared_students || 0}
-                subtitle="Ready for degree conferment"
-                icon={GraduationCap}
-                badgeText="Degree Ready"
-                badgeType="emerald"
-              />
+              <KPICard title="Pending Faculty Reviews" value={stats.pending_clearance || 0} subtitle="Faculty queue awaiting review" icon={Clock} badgeText="Pending Signoff" badgeType="purple" />
+              <KPICard title="Clearances In Progress" value={stats.in_progress_clearance || 0} subtitle="Active cross-department clearance" icon={TrendingUp} badgeText="Processing" badgeType="amber" />
+              <KPICard title="Fully Cleared Students" value={stats.cleared_students || 0} subtitle="Ready for degree conferment" icon={GraduationCap} badgeText="Degree Ready" badgeType="emerald" />
             </div>
           )}
 
           {/* REGISTRY */}
           {isRegistry() && stats && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              <KPICard
-                title="Cleared Candidates"
-                value={stats.cleared_students || 0}
-                subtitle="Eligible for certificate dispatch"
-                icon={Users}
-                badgeText="Completed"
-                badgeType="emerald"
-              />
-              <KPICard
-                title="Certificates Ready"
-                value={stats.certificates_ready || 0}
-                subtitle="Printed and available for collection"
-                icon={Award}
-                badgeText="Available"
-                badgeType="blue"
-              />
-              <KPICard
-                title="Certificates Issued"
-                value={stats.certificates_collected || 0}
-                subtitle="Successfully handed over to alumni"
-                icon={CheckCircle2}
-                badgeText="Collected"
-                badgeType="purple"
-              />
-              <KPICard
-                title="Scheduled Collection Appointments"
-                value={stats.appointments_scheduled || 0}
-                subtitle="Booked registry time slots"
-                icon={Calendar}
-                badgeText="Appointments"
-                badgeType="amber"
-              />
+              <KPICard title="Cleared Candidates" value={stats.cleared_students || 0} subtitle="Eligible for certificate dispatch" icon={Users} badgeText="Completed" badgeType="emerald" />
+              <KPICard title="Certificates Ready" value={stats.certificates_ready || 0} subtitle="Printed and available for collection" icon={Award} badgeText="Available" badgeType="blue" />
+              <KPICard title="Certificates Issued" value={stats.certificates_collected || 0} subtitle="Successfully handed over to alumni" icon={CheckCircle2} badgeText="Collected" badgeType="purple" />
+              <KPICard title="Scheduled Collection Appointments" value={stats.appointments_scheduled || 0} subtitle="Booked registry time slots" icon={Calendar} badgeText="Appointments" badgeType="amber" />
             </div>
           )}
 
           {/* AUDITOR */}
           {isAuditor() && stats && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-              <KPICard
-                title="Total System Students"
-                value={stats.total_students || 0}
-                subtitle="Registered student ledger"
-                icon={Users}
-                badgeText="Total Records"
-                badgeType="blue"
-              />
-              <KPICard
-                title="Total Cleared Records"
-                value={stats.cleared_students || 0}
-                subtitle="Finalized clearance records"
-                icon={CheckCircle2}
-                badgeText="Audit Verified"
-                badgeType="emerald"
-              />
-              <KPICard
-                title="Pending Clearances"
-                value={stats.pending_clearance || 0}
-                subtitle="Active open workflows"
-                icon={Clock}
-                badgeText="Under Audit"
-                badgeType="amber"
-              />
+              <KPICard title="Total System Students" value={stats.total_students || 0} subtitle="Registered student ledger" icon={Users} badgeText="Total Records" badgeType="blue" />
+              <KPICard title="Total Cleared Records" value={stats.cleared_students || 0} subtitle="Finalized clearance records" icon={CheckCircle2} badgeText="Audit Verified" badgeType="emerald" />
+              <KPICard title="Pending Clearances" value={stats.pending_clearance || 0} subtitle="Active open workflows" icon={Clock} badgeText="Under Audit" badgeType="amber" />
             </div>
           )}
 
-          {/* SUPER ADMIN OVERVIEW */}
+          {/* SUPER ADMIN OVERVIEW - WITH PREMIUM KPI CARDS */}
           {isAdmin() && stats && (
             <>
-              {/* Primary KPI Grid */}
+              {/* Premium KPI Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                <KPICard
+                <PremiumKPICard
                   title="Total Students"
                   value={stats.total_students || 0}
-                  subtitle="Total enrolled institutional database"
+                  subtitle="Enrolled this semester"
                   icon={Users}
-                  badgeText="Live Ledger"
-                  badgeType="blue"
+                  color="blue"
+                  trend={{ value: 12.5, label: "from last month" }}
                 />
-                <KPICard
+                <PremiumKPICard
                   title="Pending Clearances"
                   value={stats.pending_clearance || 0}
-                  subtitle="Applications awaiting first review"
+                  subtitle="Awaiting first review"
                   icon={Clock}
-                  badgeText="Queue Active"
-                  badgeType="amber"
+                  color="amber"
+                  trend={{ value: -5.2, label: "from last week" }}
                 />
-                <KPICard
-                  title="Clearance In Progress"
+                <PremiumKPICard
+                  title="In Progress"
                   value={stats.in_progress_clearance || 0}
-                  subtitle="Multi-department active checks"
+                  subtitle="Multi-department checks"
                   icon={TrendingUp}
-                  badgeText="Processing"
-                  badgeType="purple"
+                  color="purple"
+                  trend={{ value: 8.1, label: "from last week" }}
                 />
-                <KPICard
-                  title="Fully Cleared Students"
+                <PremiumKPICard
+                  title="Fully Cleared"
                   value={stats.cleared_students || 0}
-                  subtitle="Verified graduation candidates"
+                  subtitle="Ready for graduation"
                   icon={CheckCircle2}
-                  badgeText="Completed"
-                  badgeType="emerald"
+                  color="emerald"
+                  trend={{ value: 15.3, label: "from last month" }}
                 />
               </div>
 
@@ -528,7 +379,6 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-
                   {/* Finance Card */}
                   <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-sm relative overflow-hidden">
                     <div className="flex items-center justify-between mb-4">
@@ -536,39 +386,22 @@ export default function DashboardPage() {
                         <div className="p-2 bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 rounded-xl border border-amber-200/60 dark:border-amber-800/60">
                           <DollarSign className="h-5 w-5" />
                         </div>
-                        <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                          Finance Division
-                        </h3>
+                        <h3 className="text-base font-bold text-slate-900 dark:text-white">Finance Division</h3>
                       </div>
-                      <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                        Fee Clearance
-                      </span>
+                      <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">Fee Clearance</span>
                     </div>
-
                     <div className="space-y-3 pt-1">
                       <div className="flex justify-between items-center text-xs">
-                        <span className="text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1.5">
-                          <Clock className="w-3.5 h-3.5 text-amber-500" /> Pending Review
-                        </span>
-                        <span className="font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded border border-amber-200/60 dark:border-amber-800/60">
-                          {stats.finance_pending || 0}
-                        </span>
+                        <span className="text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-amber-500" /> Pending Review</span>
+                        <span className="font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded border border-amber-200/60 dark:border-amber-800/60">{stats.finance_pending || 0}</span>
                       </div>
                       <div className="flex justify-between items-center text-xs">
-                        <span className="text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1.5">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> Cleared
-                        </span>
-                        <span className="font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-200/60 dark:border-emerald-800/60">
-                          {stats.finance_cleared || 0}
-                        </span>
+                        <span className="text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> Cleared</span>
+                        <span className="font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-200/60 dark:border-emerald-800/60">{stats.finance_cleared || 0}</span>
                       </div>
                       <div className="flex justify-between items-center text-xs">
-                        <span className="text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1.5">
-                          <XCircle className="w-3.5 h-3.5 text-rose-500" /> Rejected / Holds
-                        </span>
-                        <span className="font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/60 px-2 py-0.5 rounded border border-rose-200/60 dark:border-rose-800/60">
-                          {stats.finance_not_cleared || 0}
-                        </span>
+                        <span className="text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1.5"><XCircle className="w-3.5 h-3.5 text-rose-500" /> Rejected / Holds</span>
+                        <span className="font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/60 px-2 py-0.5 rounded border border-rose-200/60 dark:border-rose-800/60">{stats.finance_not_cleared || 0}</span>
                       </div>
                     </div>
                   </div>
@@ -580,39 +413,22 @@ export default function DashboardPage() {
                         <div className="p-2 bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 rounded-xl border border-blue-200/60 dark:border-blue-800/60">
                           <BookOpen className="h-5 w-5" />
                         </div>
-                        <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                          Examinations Office
-                        </h3>
+                        <h3 className="text-base font-bold text-slate-900 dark:text-white">Examinations Office</h3>
                       </div>
-                      <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                        Academic Audit
-                      </span>
+                      <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">Academic Audit</span>
                     </div>
-
                     <div className="space-y-3 pt-1">
                       <div className="flex justify-between items-center text-xs">
-                        <span className="text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1.5">
-                          <Clock className="w-3.5 h-3.5 text-amber-500" /> Pending Review
-                        </span>
-                        <span className="font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded border border-amber-200/60 dark:border-amber-800/60">
-                          {stats.examination_pending || 0}
-                        </span>
+                        <span className="text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-amber-500" /> Pending Review</span>
+                        <span className="font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded border border-amber-200/60 dark:border-amber-800/60">{stats.examination_pending || 0}</span>
                       </div>
                       <div className="flex justify-between items-center text-xs">
-                        <span className="text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1.5">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> Cleared
-                        </span>
-                        <span className="font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-200/60 dark:border-emerald-800/60">
-                          {stats.examination_cleared || 0}
-                        </span>
+                        <span className="text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> Cleared</span>
+                        <span className="font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-200/60 dark:border-emerald-800/60">{stats.examination_cleared || 0}</span>
                       </div>
                       <div className="flex justify-between items-center text-xs">
-                        <span className="text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1.5">
-                          <XCircle className="w-3.5 h-3.5 text-rose-500" /> Rejected / Holds
-                        </span>
-                        <span className="font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/60 px-2 py-0.5 rounded border border-rose-200/60 dark:border-rose-800/60">
-                          {stats.examination_not_cleared || 0}
-                        </span>
+                        <span className="text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1.5"><XCircle className="w-3.5 h-3.5 text-rose-500" /> Rejected / Holds</span>
+                        <span className="font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/60 px-2 py-0.5 rounded border border-rose-200/60 dark:border-rose-800/60">{stats.examination_not_cleared || 0}</span>
                       </div>
                     </div>
                   </div>
@@ -624,35 +440,21 @@ export default function DashboardPage() {
                         <div className="p-2 bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 rounded-xl border border-purple-200/60 dark:border-purple-800/60">
                           <Layers className="h-5 w-5" />
                         </div>
-                        <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                          Registry & Archive
-                        </h3>
+                        <h3 className="text-base font-bold text-slate-900 dark:text-white">Registry & Archive</h3>
                       </div>
-                      <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                        Certificates
-                      </span>
+                      <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">Certificates</span>
                     </div>
-
                     <div className="space-y-3 pt-1">
                       <div className="flex justify-between items-center text-xs">
-                        <span className="text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1.5">
-                          <Award className="w-3.5 h-3.5 text-blue-500" /> Certificates Ready
-                        </span>
-                        <span className="font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded border border-blue-200/60 dark:border-blue-800/60">
-                          {stats.certificates_ready || 0}
-                        </span>
+                        <span className="text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1.5"><Award className="w-3.5 h-3.5 text-blue-500" /> Certificates Ready</span>
+                        <span className="font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded border border-blue-200/60 dark:border-blue-800/60">{stats.certificates_ready || 0}</span>
                       </div>
                       <div className="flex justify-between items-center text-xs">
-                        <span className="text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1.5">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-purple-500" /> Certificates Issued
-                        </span>
-                        <span className="font-bold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded border border-purple-200/60 dark:border-purple-800/60">
-                          {stats.certificates_collected || 0}
-                        </span>
+                        <span className="text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 text-purple-500" /> Certificates Issued</span>
+                        <span className="font-bold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded border border-purple-200/60 dark:border-purple-800/60">{stats.certificates_collected || 0}</span>
                       </div>
                     </div>
                   </div>
-
                 </div>
               </div>
             </>
@@ -672,33 +474,21 @@ export default function DashboardPage() {
 
             <div className="flex flex-wrap items-center gap-3">
               {isAdmin() && (
-                <Link
-                  href="/admin/users"
-                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-semibold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5"
-                >
+                <Link href="/admin/users" className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-semibold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5">
                   <Users className="w-3.5 h-3.5" /> Manage System Users
                 </Link>
               )}
               {isFinance() && (
-                <Link
-                  href="/clearance/finance"
-                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-semibold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5"
-                >
+                <Link href="/clearance/finance" className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-semibold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5">
                   <DollarSign className="w-3.5 h-3.5" /> Finance Clearance Queue
                 </Link>
               )}
               {isRegistry() && (
-                <Link
-                  href="/registry"
-                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-semibold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5"
-                >
+                <Link href="/registry" className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-semibold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5">
                   <Award className="w-3.5 h-3.5" /> Registry Collection Desk
                 </Link>
               )}
-              <Link
-                href="/dashboard"
-                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-xs rounded-xl transition-all flex items-center gap-1.5"
-              >
+              <Link href="/dashboard" className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-xs rounded-xl transition-all flex items-center gap-1.5">
                 <RefreshCw className="w-3.5 h-3.5 text-slate-500" /> Refresh Operational Data
               </Link>
             </div>
