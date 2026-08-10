@@ -72,11 +72,15 @@ async def get_finance_pending(
     db: Session = Depends(get_db), current_user: User = Depends(require_permission(Permission.FINANCE_VIEW_PENDING))
 ):
     query = db.query(Student)
-    if search: query = query.filter((Student.first_name.ilike(f"%{search}%")) | (Student.last_name.ilike(f"%{search}%")) | (Student.student_id.ilike(f"%{search}%")))
-    if course: query = query.filter(Student.program.ilike(f"%{course}%"))
+    if search:
+        query = query.filter((Student.first_name.ilike(f"%{search}%")) | (Student.last_name.ilike(f"%{search}%")) | (Student.student_id.ilike(f"%{search}%")))
+    if course:
+        query = query.filter(Student.program.ilike(f"%{course}%"))
     if level:
-        try: query = query.filter(Student.year_of_study == int(level))
-        except ValueError: pass
+        try:
+            query = query.filter(Student.year_of_study == int(level))
+        except ValueError:
+            pass
     students = query.all()
     result = []
     for student in students:
@@ -120,14 +124,11 @@ async def update_finance_clearance(
     status_str = update_data.get("status", "pending")
     remarks = update_data.get("remarks", "")
 
-    # Update the finance status
     finance.status = status_str
     db.commit()
 
-    # Log the action
     await log_audit(db, current_user.id, "FINANCE_CLEARANCE_UPDATED", "finance", f"Status: {status_str}. Remarks: {remarks or 'None'}")
 
-    # Send notification to student
     clearance = db.query(ClearanceRequest).filter(ClearanceRequest.id == finance.clearance_request_id).first()
     if clearance:
         msg = "Your Finance clearance has been approved." if status_str == "cleared" else f"Your Finance clearance was rejected. Reason: {remarks}"
@@ -415,14 +416,14 @@ async def get_balance_summary(
 
 @router.get("/registry/cleared-students")
 async def get_cleared_students(
-    db: Session = Depends(get_db), current_user: User = Depends(require_permission(Permission.REGISTRY_SEARCH_CLEARED))
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)
 ):
     return db.query(ClearanceRequest).filter(ClearanceRequest.overall_status == "cleared", ClearanceRequest.collection_eligible == True).all()
 
 @router.get("/registry/inventory")
 async def get_certificate_inventory(
     skip: int = 0, limit: int = 100, student_id: Optional[int] = None, status: Optional[CertificateStatus] = None,
-    db: Session = Depends(get_db), current_user: User = Depends(require_permission(Permission.REGISTRY_VIEW_INVENTORY))
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)
 ):
     query = db.query(RegistryInventory)
     if student_id: query = query.filter(RegistryInventory.student_id == student_id)
@@ -445,7 +446,7 @@ async def create_certificate_inventory(
 
 @router.put("/registry/mark-ready/{student_id}", response_model=RegistryInventoryResponse)
 async def mark_certificate_ready(
-    student_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_permission(Permission.REGISTRY_MARK_AVAILABLE))
+    student_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)
 ):
     student = db.query(Student).filter(Student.id == student_id).first()
     if not student: raise HTTPException(status_code=404, detail="Student not found")
@@ -480,15 +481,15 @@ async def mark_certificate_ready(
 
     await log_audit(db, current_user.id, "CERTIFICATE_MARKED_READY", "registry", f"Marked certificate {certificate.certificate_number} as ready for collection")
 
-    await manager.broadcast_to_role("admin", {
+    await manager.broadcast_to_role({
         "type": "CERTIFICATE_READY",
         "message": f"Certificate for {student.first_name} {student.last_name} is ready for collection!"
-    })
+    }, "admin")
 
-    await manager.broadcast_to_role("student", {
+    await manager.broadcast_to_role({
         "type": "CERTIFICATE_READY",
         "message": "Your certificate is ready for collection!"
-    })
+    }, "student")
 
     return certificate
 

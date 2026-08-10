@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useAuth } from "../context/AuthContext";
+import { ShieldCheck } from "lucide-react";
 
 const DEPARTMENT_CREDENTIALS = [
   {
@@ -463,6 +465,20 @@ export default function LoginPage() {
                   </>
                 )}
               </button>
+
+              {/* Public Certificate Verification Link */}
+              <div className="mt-6 pt-6 border-t border-slate-200">
+                <p className="text-xs text-slate-500 text-center mb-3">
+                  Need to verify a certificate?
+                </p>
+                <Link 
+                  href="/verify" 
+                  className="flex items-center justify-center gap-2 w-full py-3 px-4 rounded-xl border-2 border-emerald-200 bg-emerald-50/50 text-emerald-700 font-semibold text-sm hover:bg-emerald-100 hover:border-emerald-300 transition-all"
+                >
+                  <ShieldCheck className="h-4 w-4" />
+                  Verify a Certificate
+                </Link>
+              </div>
 
               {/* Quick Login Section */}
               <div className="pt-2">

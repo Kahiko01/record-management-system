@@ -34,49 +34,49 @@ export default function Sidebar() {
       title: "Finance",
       items: [
         { name: "Fee Balances", href: "/finance/balances", icon: Wallet,
-          tasks: ["finance_view_dashboard", "finance:view_dashboard", "finance_view_reports", "finance:view_reports"] },
+          tasks: ["finance_view_dashboard", "finance_view_reports"] },
         { name: "Payment Upload", href: "/finance/payments", icon: FileSpreadsheet,
-          tasks: ["finance_upload", "finance:upload", "finance_data_entry", "finance:data_entry"] },
+          tasks: ["finance_upload", "finance_data_entry"] },
         { name: "Clearance Queue", href: "/clearance/finance", icon: DollarSign,
-          tasks: ["finance_view_dashboard", "finance:view_dashboard", "finance_approve", "finance:approve"] },
+          tasks: ["finance_view_pending", "finance_approve"] },
       ]
     },
     {
       title: "Academics",
       items: [
         { name: "Examination", href: "/clearance/examination", icon: BookOpen,
-          tasks: ["exam_view_dashboard", "exam:view_dashboard", "exam_approve", "exam:approve"] },
+          tasks: ["exam_view_pending", "exam_approve"] },
         { name: "Dean Review", href: "/clearance/dean", icon: GraduationCap,
-          tasks: ["dean_view_dashboard", "dean:view_dashboard", "dean_approve", "dean:approve"] },
+          tasks: ["dean_view_pending", "dean_approve"] },
       ]
     },
     {
       title: "Registry",
       items: [
         { name: "Certificates", href: "/registry", icon: Archive,
-          tasks: ["registry_view_inventory", "registry:view_inventory", "registry_mark_available", "registry:mark_available"] },
+          tasks: ["registry_view_inventory", "registry_mark_available"] },
         { name: "Collections", href: "/registry/collections", icon: Package,
-          tasks: ["registry_view_collections", "registry:view_collections"] },
+          tasks: ["registry_view_inventory"] },
       ]
     },
     {
       title: "Administration",
       items: [
         { name: "User Management", href: "/admin/users", icon: Users,
-          tasks: ["admin_manage_users", "admin:manage_users"] },
+          tasks: ["admin_manage_users"] },
         { name: "Student Import", href: "/admin/students", icon: UserPlus,
-          tasks: ["admin_import_students", "admin:import_students"] },
+          tasks: ["admin_import_students"] },
         { name: "Audit Logs", href: "/admin/audit", icon: ShieldCheck,
-          tasks: ["admin_view_audit", "admin:view_audit"] },
+          tasks: ["admin_view_audit"] },
         { name: "System Monitor", href: "/admin/monitoring", icon: Activity,
-          tasks: ["admin_view_monitoring", "admin:view_monitoring"] },
+          tasks: ["admin_view_monitoring"] },
       ]
     },
   ];
 
   return (
     <aside className={`fixed left-0 top-16 h-[calc(100vh-4rem)] bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 transition-all duration-300 z-30 flex flex-col ${collapsed ? 'w-16' : 'w-64'}`}>
-      
+
       {/* Collapse Toggle Button */}
       <button
         onClick={() => setCollapsed(!collapsed)}
@@ -102,7 +102,7 @@ export default function Sidebar() {
                 {visibleItems.map((item) => {
                   const Icon = item.icon;
                   const isActive = pathname === item.href;
-                  
+
                   return (
                     <Link
                       key={item.name}
@@ -115,8 +115,8 @@ export default function Sidebar() {
                       title={collapsed ? item.name : undefined}
                     >
                       <Icon className={`h-5 w-5 flex-shrink-0 transition-colors ${
-                        isActive 
-                          ? 'text-emerald-600 dark:text-emerald-400' 
+                        isActive
+                          ? 'text-emerald-600 dark:text-emerald-400'
                           : 'text-gray-400 dark:text-slate-500 group-hover:text-gray-600 dark:group-hover:text-slate-300'
                       }`} />
                       {!collapsed && <span className="truncate">{item.name}</span>}

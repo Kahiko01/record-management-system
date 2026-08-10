@@ -116,3 +116,21 @@ async def verify_certificate(
         "status": certificate.status,
         "collection_date": certificate.collection.created_at if hasattr(certificate, 'collection') and certificate.collection else None
     }
+@router.get("/verify/{certificate_number}")
+async def verify_certificate_public(certificate_number: str, db: Session = Depends(get_db)):
+    """Public endpoint - no auth required - to verify a certificate"""
+    cert = db.query(RegistryInventory).filter(RegistryInventory.certificate_number == certificate_number).first()
+    if not cert:
+        return {"valid": False, "message": "Certificate not found."}
+    
+    student = db.query(Student).filter(Student.id == cert.student_id).first()
+    
+    return {
+        "valid": True,
+        "certificate_number": cert.certificate_number,
+        "student_name": f"{student.first_name} {student.last_name}" if student else "Unknown",
+        "programme": cert.programme,
+        "graduation_year": cert.graduation_year,
+        "status": cert.status.value if hasattr(cert.status, 'value') else str(cert.status),
+        "verified_at": datetime.utcnow().isoformat()
+    }
