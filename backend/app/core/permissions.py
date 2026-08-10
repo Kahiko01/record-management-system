@@ -4,11 +4,11 @@ Enhanced for University Digital Certificate Ecosystem
 """
 import logging
 from enum import Enum
-from typing import List
+from typing import List, Optional
 from fastapi import HTTPException, status, Depends
 from sqlalchemy.orm import Session
 
-from ..models.models import User, UserRole, Student
+from ..models.models import User, UserRole, Student, UserTask, Task
 from ..auth.auth import get_current_active_user
 from ..core.database import get_db
 
@@ -221,7 +221,7 @@ ROLE_PERMISSIONS = {
     ],
 }
 
-# ============= 3. PERMISSION CHECK FUNCTIONS (MULTI-ROLE READY) =============
+# ============= 3. PERMISSION CHECK FUNCTIONS (ZERO TRUST) =============
 
 def get_user_effective_role(user: User):
     """Helper to get the role string, checking new active_role first, then legacy role"""
@@ -231,81 +231,94 @@ def get_user_effective_role(user: User):
         return str(user.role).lower()
     return None
 
-def has_permission(user: User, permission: Permission) -> bool:
+def has_permission(user: User, permission: Permission, db: Session = None) -> bool:
+    """
+    TRUE ZERO TRUST: Only checks user_tasks table.
+    Roles are just labels - they grant NOTHING automatically.
+    Every permission must be explicitly granted via task checkboxes.
+    """
     if not user: return False
     if not getattr(user, 'is_active', True): return False
     
+    # Super Admin bypass (the only exception)
     role_name = get_user_effective_role(user)
-    
-    # 1. SUPER ADMIN OVERRIDE (Fixes the 403 Forbidden lockout!)
     if role_name in ["super_admin", "admin"]:
         return True
-        
-    # 2. MULTI-ROLE UNION CHECK (New System: Combines permissions from all assigned roles)
-    if hasattr(user, 'roles') and user.roles:
-        for r in user.roles:
-            try:
-                role_enum = UserRole(r.name)
-                if permission in ROLE_PERMISSIONS.get(role_enum, []):
-                    return True
-            except ValueError:
-                continue
-                
-    # 3. LEGACY FALLBACK (Old System: Single role string)
-    if role_name:
-        try:
-            role_enum = UserRole(role_name)
-            if permission in ROLE_PERMISSIONS.get(role_enum, []):
-                return True
-        except ValueError:
-            pass
-
-    return False
-
-def has_any_permission(user: User, permissions: List[Permission]) -> bool:
-    return any(has_permission(user, p) for p in permissions)
-
-def has_all_permissions(user: User, permissions: List[Permission]) -> bool:
-    return all(has_permission(user, p) for p in permissions)
-
-def get_user_permissions(user: User) -> List[str]:
-    if not user: return []
     
+    # If no database session provided, we can't check tasks
+    if not db:
+        return False
+    
+    # Convert Permission enum to task code (e.g., "finance:approve" -> "finance_approve")
+    # This allows us to check if the user has the specific task enabled
+    task_code = permission.value.replace(":", "_")
+    
+    # Check if user has this specific task enabled in user_tasks table
+    task = db.query(Task).filter(Task.code == task_code).first()
+    if not task:
+        # Task doesn't exist in database = permission denied
+        return False
+    
+    user_task = db.query(UserTask).filter(
+        UserTask.user_id == user.id,
+        UserTask.task_id == task.id,
+        UserTask.is_enabled == True
+    ).first()
+    
+    return user_task is not None
+
+def has_any_permission(user: User, permissions: List[Permission], db: Session = None) -> bool:
+    return any(has_permission(user, p, db) for p in permissions)
+
+def has_all_permissions(user: User, permissions: List[Permission], db: Session = None) -> bool:
+    return all(has_permission(user, p, db) for p in permissions)
+
+def get_user_permissions(user: User, db: Session = None) -> List[str]:
+    if not user: return []
+
     role_name = get_user_effective_role(user)
     if role_name in ["super_admin", "admin"]:
         return [p.value for p in Permission]
-        
+
     perms = set()
-    if hasattr(user, 'roles') and user.roles:
-        for r in user.roles:
-            try:
-                role_enum = UserRole(r.name)
-                perms.update([p.value for p in ROLE_PERMISSIONS.get(role_enum, [])])
-            except ValueError:
-                pass
-                
-    if role_name:
-        try:
-            role_enum = UserRole(role_name)
-            perms.update([p.value for p in ROLE_PERMISSIONS.get(role_enum, [])])
-        except ValueError:
-            pass
-            
+    
+    # Check tasks from database
+    if db:
+        user_tasks = db.query(UserTask).filter(
+            UserTask.user_id == user.id,
+            UserTask.is_enabled == True
+        ).all()
+        
+        for ut in user_tasks:
+            task = db.query(Task).filter(Task.id == ut.task_id).first()
+            if task:
+                # Convert task code back to permission format
+                perms.add(task.code.replace("_", ":"))
+
     return list(perms)
 
 # ============= 4. FASTAPI DEPENDENCIES (THE SECURITY GUARDS) =============
 
 def require_permission(permission: Permission):
-    def permission_checker(current_user: User = Depends(get_current_active_user)):
-        if not has_permission(current_user, permission):
-            logger.warning(f"Authorization Failed: User {current_user.username} attempted to access {permission.value}")
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Access Denied. Required permission: {permission.value}")
+    def permission_checker(
+        current_user: User = Depends(get_current_active_user),
+        db: Session = Depends(get_db)
+    ):
+        if not has_permission(current_user, permission, db):
+            logger.warning(f"Task Authorization Failed: User {current_user.username} lacks permission '{permission.value}'")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, 
+                detail=f"Access Denied. You do not have the '{permission.value}' permission."
+            )
         return current_user
     return permission_checker
 
 def require_any_permission(permissions: List[Permission]):
-    def permission_checker(current_user: User = Depends(get_current_active_user)):
-        if not has_any_permission(current_user, permissions):
+    def permission_checker(
+        current_user: User = Depends(get_current_active_user),
+        db: Session = Depends(get_db)
+    ):
+        if not has_any_permission(current_user, permissions, db):
             logger.warning(f"Authorization Failed: User {current_user.username} lacked required permissions.")
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access Denied. You do not have the required permissions.")
         return current_user
@@ -336,7 +349,6 @@ def require_student_ownership():
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access Denied. You can only access your own records.")
         return current_user
     return ownership_checker
-from ..models.models import UserTask, Task
 
 # ==========================================
 # PHASE 4: GRANULAR TASK PERMISSIONS
@@ -348,23 +360,23 @@ def has_task(user: User, task_code: str, db: Session) -> bool:
     Example: has_task(user, 'registry_upload', db)
     """
     if not user: return False
-    
+
     # 1. Super Admin Override
     role_name = get_user_effective_role(user)
     if role_name in ["super_admin", "admin"]:
         return True
-        
+
     # 2. Find the task by its code
     task = db.query(Task).filter(Task.code == task_code).first()
     if not task: return False
-    
+
     # 3. Check if the user has this task enabled in user_tasks table
     user_task = db.query(UserTask).filter(
         UserTask.user_id == user.id,
         UserTask.task_id == task.id,
         UserTask.is_enabled == True
     ).first()
-    
+
     return user_task is not None
 
 def require_task(task_code: str):
@@ -379,7 +391,7 @@ def require_task(task_code: str):
         if not has_task(current_user, task_code, db):
             logger.warning(f"Task Authorization Failed: User {current_user.username} lacked task '{task_code}'")
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, 
+                status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Access Denied. You do not have the '{task_code}' permission."
             )
         return current_user

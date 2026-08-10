@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
+import { notificationApi } from "../lib/api";
 import { useTheme } from "../context/ThemeContext";
 import { LogOut, Sun, Moon, Bell, Check, X, Inbox } from "lucide-react";
 
@@ -32,26 +33,11 @@ export default function TopBar() {
   const fetchNotifications = async () => {
     setLoading(true);
     try {
-      // Try to fetch from API
-      const response = await fetch('/api/notifications', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setNotifications(data.data || []);
-      } else if (response.status === 404) {
-        // API not implemented yet - silently fail
-        console.log('Notifications API not available');
-        setNotifications([]);
-      } else {
-        console.error('Failed to fetch notifications:', response.status);
-        setNotifications([]);
-      }
+      const response = await notificationApi.getNotifications();
+      // FastAPI usually returns the array directly, but we handle both cases just in case
+      const data = Array.isArray(response.data) ? response.data : (response.data?.data || []);
+      setNotifications(data);
     } catch (error) {
-      // Silently handle any errors
       console.log('Notifications not available');
       setNotifications([]);
     } finally {
@@ -61,15 +47,8 @@ export default function TopBar() {
 
   const handleMarkRead = async (id: number) => {
     try {
-      const response = await fetch(`/api/notifications/${id}/read`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-      });
-      if (response.ok) {
-        setNotifications(notifications.map(n => n.id === id ? { ...n, is_read: true } : n));
-      }
+      await notificationApi.markRead(id);
+      setNotifications(notifications.map(n => n.id === id ? { ...n, is_read: true } : n));
     } catch (error) {
       console.error("Failed to mark as read:", error);
     }
@@ -79,6 +58,14 @@ export default function TopBar() {
 
   const getIconForType = (type: string) => {
     switch (type) {
+      case "clearance_request": return "📋";
+      case "finance_approved": return "💰";
+      case "finance_rejected": return "💸";
+      case "examination_approved": return "📝";
+      case "examination_rejected": return "📝";
+      case "certificate_available": return "🎓";
+      case "appointment_confirmed": return "📅";
+      case "certificate_collected": return "✅";
       case "approval": return "✅";
       case "rejection": return "❌";
       case "info": return "ℹ️";

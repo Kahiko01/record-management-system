@@ -9,7 +9,7 @@ import { ClearanceRequest, ClearanceStatus } from "../../types";
 import { CheckCircle, XCircle, Clock, GraduationCap, Search, X } from "lucide-react";
 
 export default function DeanClearancePage() {
-  const { user, hasPermission } = useAuth();
+  const { user, hasPermission, hasTask } = useAuth();
   const [requests, setRequests] = useState<ClearanceRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedRequest, setSelectedRequest] = useState<ClearanceRequest | null>(null);
@@ -161,10 +161,21 @@ export default function DeanClearancePage() {
                           {request.request_date ? new Date(request.request_date).toLocaleDateString() : 'N/A'}
                         </td>
                         <td className="px-6 py-4">
-                          {hasPermission(Permission.DEAN_APPROVE) ? (
+                          {(hasTask("dean_approve") || hasTask("dean:approve") || 
+                            hasTask("dean_reject") || hasTask("dean:reject")) ? (
                             <div className="flex gap-2">
-                              <button onClick={() => { setSelectedRequest(request); setAction("approve"); }} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors">Approve</button>
-                              <button onClick={() => { setSelectedRequest(request); setAction("reject"); }} className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-colors">Reject</button>
+                              {(hasTask("dean_approve") || hasTask("dean:approve")) && (
+                                <button onClick={() => { setSelectedRequest(request); setAction("approve"); }} 
+                                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors">
+                                  Approve
+                                </button>
+                              )}
+                              {(hasTask("dean_reject") || hasTask("dean:reject")) && (
+                                <button onClick={() => { setSelectedRequest(request); setAction("reject"); }} 
+                                  className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-colors">
+                                  Reject
+                                </button>
+                              )}
                             </div>
                           ) : (
                             <span className="text-gray-500 dark:text-slate-500 text-xs italic">View Only</span>
@@ -188,7 +199,7 @@ export default function DeanClearancePage() {
                   </h2>
                   <button onClick={() => { setSelectedRequest(null); setAction(null); }} className="text-gray-500 dark:text-slate-500 hover:text-gray-900 dark:hover:text-white"><X className="h-5 w-5" /></button>
                 </div>
-                
+
                 <div className="bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl p-4 mb-5">
                   <p className="text-sm text-gray-500 dark:text-slate-400">Student</p>
                   <p className="text-base font-bold text-gray-900 dark:text-white">{selectedRequest.student?.first_name} {selectedRequest.student?.last_name}</p>

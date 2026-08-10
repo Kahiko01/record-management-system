@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 import os
 from dotenv import load_dotenv
 
+# Use relative imports (with .) for modules within the app
 from .core.database import engine, get_db, Base
 from .models import models
 from .routes import (
@@ -20,6 +21,7 @@ from .routes import (
 from .auth.auth import get_current_active_user
 from .models.models import User, UserRole
 from .auth.auth import get_password_hash
+from .core.initialize import initialize_system  # <-- IMPORT FROM .core.initialize
 
 load_dotenv()
 
@@ -66,6 +68,35 @@ app.include_router(student_routes.router)
 app.include_router(clearance_routes.router)
 app.include_router(certificate_routes.router)
 app.include_router(user_routes.router)
+
+# ============================================
+# DIRECT ENDPOINT FOR REGISTRY MARK READY
+# ============================================
+@app.put("/clearance/registry/mark-ready/{certificate_id}")
+async def mark_certificate_ready(
+    certificate_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Mark a certificate as ready for collection"""
+    from .models.models import RegistryInventory
+    
+    certificate = db.query(RegistryInventory).filter(
+        RegistryInventory.id == certificate_id
+    ).first()
+    
+    if not certificate:
+        raise HTTPException(status_code=404, detail="Certificate not found")
+    
+    # Update the status
+    certificate.status = "ready_for_collection"
+    db.commit()
+    
+    return {"message": "Certificate marked as ready"}
+
+# ============================================
+# OTHER ENDPOINTS
+# ============================================
 
 @app.get("/")
 async def root():
@@ -183,6 +214,13 @@ async def seed_dashboard_data(db: Session = Depends(get_db)):
     db.commit()
 
     return {"message": "Successfully seeded 20 students, clearances, and 10 certificates! Refresh your dashboard."}
+
+# ============================================
+# STARTUP EVENT - Initialize system on first run
+# ============================================
+@app.on_event("startup")
+async def startup_event():
+    initialize_system()
 
 if __name__ == "__main__":
     import uvicorn

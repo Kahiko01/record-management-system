@@ -322,9 +322,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const hasPermission = (permission: Permission): boolean => {
-    if (!user) return false;
-    if (user.role === 'super_admin') return true;
-    return getUserPermissions().includes(permission);
+    return hasTask(permission);
   };
 
   const hasAnyPermission = (permissions: Permission[]): boolean => {
@@ -346,10 +344,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const hasTask = (taskCode: string): boolean => {
     if (!user) return false;
-    // Super Admin always has all tasks
+    // Super Admin bypass
     if (user.role === 'super_admin' || user.role === 'admin') return true;
-    // Check if the task code is in the user's granted_tasks array
-    return (user as any).granted_tasks?.includes(taskCode) || false;
+    
+    const grantedTasks = (user as any).granted_tasks || [];
+    
+    // Check exact match
+    if (grantedTasks.includes(taskCode)) return true;
+    
+    // Check underscore version (exam:approve -> exam_approve)
+    const underscoreVersion = taskCode.replace(/:/g, '_');
+    if (grantedTasks.includes(underscoreVersion)) return true;
+    
+    // Check colon version (exam_approve -> exam:approve)
+    const colonVersion = taskCode.replace(/_/g, ':');
+    if (grantedTasks.includes(colonVersion)) return true;
+    
+    return false;
   };
 
   const isAdmin = () => user?.role === 'super_admin';

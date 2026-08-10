@@ -70,7 +70,13 @@ export const registryApi = {
   updateCertificate: (id: number, data: any) => api.put(`/clearance/registry/inventory/${id}`, data),
   getCollectionsReport: () => api.get('/clearance/registry/collections-report'),
   getCertificates: (params?: any) => api.get('/clearance/registry/inventory', { params }),
-  markReady: (certificateId: number) => api.put(`/clearance/registry/mark-ready/${certificateId}`),
+  markReady: (studentId: number) => api.put(`/clearance/registry/mark-ready/${studentId}`), // ✅ Updated to use studentId
+};
+
+// ✅ CORRECTED: Notification API with proper endpoint paths
+export const notificationApi = {
+  getNotifications: () => api.get('/clearance/notifications'),
+  markRead: (id: number) => api.put(`/clearance/notifications/${id}`),
 };
 
 export const storageApi = {
@@ -96,11 +102,6 @@ export const collectionApi = {
   collect: (data: any) => api.post('/clearance/collect', data),
 };
 
-export const notificationApi = {
-  getMyNotifications: () => api.get('/clearance/notifications'),
-  markRead: (id: number) => api.put(`/clearance/notifications/${id}`, { is_read: true }),
-};
-
 export const auditApi = {
   getLogs: () => api.get('/clearance/audit/logs'),
 };
@@ -108,13 +109,13 @@ export const auditApi = {
 // === USER MANAGEMENT API ===
 export const userApi = {
   getAll: (params?: any) => api.get('/users', { params }),
-  create: (data: any) => api.post('/users', data),
+  create: (data: any) => api.post('/users/', data),
   update: (id: number, data: any) => api.put(`/users/${id}`, data),
   delete: (id: number) => api.delete(`/users/${id}`),
-  toggleStatus: (id: number) => api.put(`/users/${id}/toggle-status`),
+  toggleStatus: (id: number) => api.put(`/users/${id}/toggle-status`, {}),
   resetPassword: (id: number, data: any) => api.put(`/users/${id}/reset-password`, data),
   getRoles: () => api.get('/users/roles'),
-  getRoles: () => api.get('/users/roles/list'),
+  getRolesList: () => api.get('/users/roles/list'),
   updateRoles: (userId: number, data: any) => api.put(`/users/${userId}/roles`, data),
   getTasks: () => api.get('/users/tasks/list'),
   getUserTasks: (userId: number) => api.get(`/users/${userId}/tasks`),

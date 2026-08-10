@@ -27,7 +27,7 @@ class Role(Base):
     name = Column(String, unique=True, index=True, nullable=False) # e.g., "finance", "dean"
     display_name = Column(String, nullable=False) # e.g., "Finance Officer"
     department = Column(String, nullable=True)
-    
+
     # Relationship to users
     users = relationship("User", secondary=user_roles, back_populates="roles")
 
@@ -53,6 +53,7 @@ class ClearanceStatus(str, enum.Enum):
 
 class CertificateStatus(str, enum.Enum):
     AWAITING_CLEARANCE = "awaiting_clearance"
+    IN_STORAGE = "in_storage"
     READY_FOR_COLLECTION = "ready_for_collection"
     ON_HOLD = "on_hold"
     COLLECTED = "collected"
@@ -409,6 +410,7 @@ class AuditLog(Base):
 
     # Relationships
     user = relationship("User", back_populates="audit_logs")
+
 # ==========================================
 # PHASE 4: GRANULAR TASK PERMISSIONS
 # ==========================================
@@ -430,7 +432,7 @@ class UserTask(Base):
     is_enabled = Column(Boolean, default=True)
     granted_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     granted_at = Column(DateTime, default=datetime.utcnow)
-    
+
     # Relationships
     user = relationship("User", foreign_keys=[user_id])
     task = relationship("Task")

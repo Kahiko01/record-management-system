@@ -1,3 +1,24 @@
-*.db
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*.pyo
+
+# Virtual environments
+venv/
+.venv/
+
+# SQLite databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Node
+node_modules/
+.next/
+
+# Environment variables
+.env
+.env.*
+
+# Logs
+*.log

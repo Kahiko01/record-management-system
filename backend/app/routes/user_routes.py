@@ -6,7 +6,7 @@ from datetime import datetime
 from sqlalchemy import or_
 from ..core.database import get_db
 from ..models.models import User, UserRole, Role, user_roles, Task, UserTask
-from ..auth.auth import get_current_active_user
+from ..auth.auth import get_current_active_user, get_password_hash
 from ..core.permissions import require_permission, Permission
 from ..utils.audit import log_audit
 from passlib.context import CryptContext
@@ -18,11 +18,10 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 class UserCreate(BaseModel):
     username: str
-    email: str
-    full_name: str
+    email: Optional[str] = None  # Make email optional so it doesn't crash if left blank
     password: str
-    role: str
-    department: Optional[str] = None
+    role: str                    # Accept as simple string
+    full_name: Optional[str] = None
 
 class UserUpdate(BaseModel):
     username: Optional[str] = None
@@ -37,6 +36,7 @@ class PasswordReset(BaseModel):
 class RoleAssignment(BaseModel):
     role_id: int
     is_department_uploader: bool = False
+    uploader_department: Optional[str] = None
 
 class UserRolesUpdate(BaseModel):
     roles: List[RoleAssignment]
@@ -67,7 +67,7 @@ async def get_users(
                 User.full_name.ilike(f"%{search}%")
             )
         )
-    
+
     if role:
         query = query.filter(User.role == role)
     if status == "active":
@@ -98,51 +98,58 @@ async def create_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission(Permission.USER_CREATE))
 ):
-    # Check if username exists
-    existing_username = db.query(User).filter(User.username == user_data.username).first()
-    if existing_username:
+    # 1. Check for duplicates
+    if db.query(User).filter(User.username == user_data.username).first():
         raise HTTPException(status_code=400, detail="Username already exists")
 
-    # Check if email exists
-    existing_email = db.query(User).filter(User.email == user_data.email).first()
-    if existing_email:
+    if user_data.email and db.query(User).filter(User.email == user_data.email).first():
         raise HTTPException(status_code=400, detail="Email already exists")
 
-    # Validate role
-    try:
-        user_role = UserRole(user_data.role)
-    except ValueError:
+    # 2. Map the pretty string role to the strict UserRole Enum
+    role_map = {
+        "super_admin": UserRole.SUPER_ADMIN,
+        "finance": UserRole.FINANCE,
+        "examination_office": UserRole.EXAMINATION_OFFICE,
+        "dean": UserRole.DEAN,
+        "registry_officer": UserRole.REGISTRY_OFFICER,
+        "internal_auditor": UserRole.INTERNAL_AUDITOR,
+        "student": UserRole.STUDENT
+    }
+
+    # Clean up the string (e.g. "Registry Officer" -> "registry_officer")
+    clean_role = user_data.role.lower().replace(" ", "_")
+    user_role = role_map.get(clean_role)
+
+    if not user_role:
         raise HTTPException(status_code=400, detail=f"Invalid role: {user_data.role}")
 
-    # Hash password
-    hashed_password = pwd_context.hash(user_data.password)
+    # 2.5 BULLETPROOF EMAIL HANDLING
+    # Catch None, empty strings "", or strings with just spaces "   "
+    final_email = user_data.email
+    if not final_email or not final_email.strip():
+        # Generate a unique dummy email so the database doesn't crash
+        final_email = f"{user_data.username}@system.local"
 
-    # Create user
+    # 3. Create the user
     new_user = User(
         username=user_data.username,
-        email=user_data.email,
-        full_name=user_data.full_name,
-        hashed_password=hashed_password,
+        email=final_email,  # <--- USING THE BULLETPROOF EMAIL
+        hashed_password=get_password_hash(user_data.password),
         role=user_role,
-        department=user_data.department,
+        full_name=user_data.full_name or user_data.username,
         is_active=True
     )
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
 
-    await log_audit(db, current_user.id, "USER_CREATED", "user_management",
-                    f"Created user: {user_data.username} with role: {user_data.role}")
+    await log_audit(db, current_user.id, "USER_CREATED", "admin", f"Created new user: {new_user.username}")
 
     return {
-        "id": new_user.id,
+        "message": "User created successfully",
+        "user_id": new_user.id,
         "username": new_user.username,
-        "email": new_user.email,
-        "full_name": new_user.full_name,
-        "role": new_user.role.value if hasattr(new_user.role, 'value') else str(new_user.role),
-        "department": new_user.department,
-        "is_active": new_user.is_active,
-        "message": "User created successfully"
+        "role": new_user.role.value if hasattr(new_user.role, 'value') else str(new_user.role)
     }
 
 @router.put("/{user_id}")
@@ -291,7 +298,8 @@ async def get_all_roles(
 ):
     """Returns all available system roles for the admin UI"""
     roles = db.query(Role).all()
-    return roles
+    # Ensure each role has id and name
+    return [{"id": r.id, "name": r.name, "display_name": r.display_name, "department": r.department} for r in roles]
 
 @router.put("/{user_id}/roles")
 async def update_user_roles(
@@ -300,37 +308,33 @@ async def update_user_roles(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission(Permission.USER_ASSIGN_ROLE))
 ):
-    """Assigns multiple roles to a user and sets their active role"""
+    """Update user's base roles (labels only - no automatic permissions)"""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # 1. Clear existing roles from the junction table
+    # Clear existing role assignments
     db.execute(user_roles.delete().where(user_roles.c.user_id == user_id))
 
-    # 2. Insert the new roles
+    # Add new role assignments
     for r in roles_data.roles:
-        # Get the role name to determine the uploader_department
-        role_obj = db.query(Role).filter(Role.id == r.role_id).first()
-        dept = role_obj.department.lower() if role_obj and role_obj.department else None
-
         db.execute(user_roles.insert().values(
             user_id=user_id,
             role_id=r.role_id,
             is_department_uploader=r.is_department_uploader,
-            uploader_department=dept if r.is_department_uploader else None
+            uploader_department=r.uploader_department
         ))
 
-    # 3. Set the user's active role
+    # Set active role
     if roles_data.active_role_id:
         user.active_role_id = roles_data.active_role_id
 
     db.commit()
-    
-    await log_audit(db, current_user.id, "USER_ROLES_UPDATED", "user_management",
-                    f"Updated roles for user: {user.username}")
-    
-    return {"message": "Roles updated successfully", "user_id": user_id}
+
+    await log_audit(db, current_user.id, "USER_ROLES_UPDATED", "admin",
+                    f"Updated roles for user {user.username}: {len(roles_data.roles)} roles assigned")
+
+    return {"message": "Roles updated successfully", "roles_count": len(roles_data.roles)}
 
 # ==========================================
 # GRANULAR TASK MANAGEMENT ENDPOINTS
@@ -380,8 +384,8 @@ async def update_user_tasks(
         ))
 
     db.commit()
-    
+
     await log_audit(db, current_user.id, "USER_TASKS_UPDATED", "user_management",
                     f"Updated tasks for user: {user.username}")
-    
+
     return {"message": "Tasks updated successfully"}

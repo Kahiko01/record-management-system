@@ -259,7 +259,7 @@ async def bulk_upload_payments(
             # Find or create FinanceClearance
             finance = db.query(FinanceClearance).filter(FinanceClearance.clearance_request_id == clearance.id).first()
             outstanding = item.amount_due - item.amount_paid
-            
+
             # 🚨 THE MAGIC AUTO-CLEAR LOGIC 🚨
             auto_cleared = outstanding <= 0
 
@@ -267,26 +267,26 @@ async def bulk_upload_payments(
                 finance.amount_due = item.amount_due
                 finance.amount_paid = item.amount_paid
                 finance.outstanding_balance = outstanding
-                
+
                 # If balance is 0 or less, auto-approve!
                 if auto_cleared and finance.status != ClearanceStatus.CLEARED:
                     finance.status = ClearanceStatus.CLEARED
                     finance.cleared_at = datetime.utcnow()
                     finance.cleared_by = current_user.id
                     auto_cleared_count += 1
-                    
+
                     # Send Notification to student
                     notification = Notification(
-                        student_id=student.id, sender_id=current_user.id, 
-                        notification_type=NotificationType.CLEARANCE_REQUEST, 
-                        title="Finance Auto-Cleared ✅", 
+                        student_id=student.id, sender_id=current_user.id,
+                        notification_type=NotificationType.CLEARANCE_REQUEST,
+                        title="Finance Auto-Cleared ✅",
                         message=f"Congratulations! Your finance clearance was automatically approved because your fee balance is fully paid."
                     )
                     db.add(notification)
                 elif not auto_cleared and finance.status == ClearanceStatus.CLEARED:
                     # If they owe money again, revoke clearance
-                    finance.status = ClearanceStatus.PENDING 
-                
+                    finance.status = ClearanceStatus.PENDING
+
                 updated_count += 1
             else:
                 new_finance = FinanceClearance(
@@ -300,22 +300,22 @@ async def bulk_upload_payments(
                 )
                 db.add(new_finance)
                 created_count += 1
-                
+
                 if auto_cleared:
                     auto_cleared_count += 1
                     notification = Notification(
-                        student_id=student.id, sender_id=current_user.id, 
-                        notification_type=NotificationType.CLEARANCE_REQUEST, 
-                        title="Finance Auto-Cleared ✅", 
+                        student_id=student.id, sender_id=current_user.id,
+                        notification_type=NotificationType.CLEARANCE_REQUEST,
+                        title="Finance Auto-Cleared ✅",
                         message=f"Congratulations! Your finance clearance was automatically approved because your fee balance is fully paid."
                     )
                     db.add(notification)
-            
+
             # Update overall clearance status if Finance just got auto-cleared
             if auto_cleared:
                 exam = db.query(ExaminationClearance).filter(ExaminationClearance.clearance_request_id == clearance.id).first()
                 exam_status_str = exam.status.value if exam and hasattr(exam.status, 'value') else "pending"
-                
+
                 if exam_status_str == "cleared":
                     clearance.overall_status = "cleared"
                     clearance.collection_eligible = True
@@ -434,18 +434,47 @@ async def create_certificate_inventory(
     await log_audit(db, current_user.id, "CERTIFICATE_ADDED_TO_INVENTORY", "registry", f"Added certificate {inventory.certificate_number} to inventory")
     return db_inventory
 
-@router.put("/registry/mark-ready/{certificate_id}", response_model=RegistryInventoryResponse)
+# 🚀 NEW SUPERCHARGED FUNCTION - Auto-creates certificate if it doesn't exist
+@router.put("/registry/mark-ready/{student_id}", response_model=RegistryInventoryResponse)
 async def mark_certificate_ready(
-    certificate_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_permission(Permission.REGISTRY_MARK_AVAILABLE))
+    student_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_permission(Permission.REGISTRY_MARK_AVAILABLE))
 ):
-    certificate = db.query(RegistryInventory).filter(RegistryInventory.id == certificate_id).first()
-    if not certificate: raise HTTPException(status_code=404, detail="Certificate not found")
-    clearance = db.query(ClearanceRequest).filter(ClearanceRequest.student_id == certificate.student_id).first()
-    if not clearance or clearance.overall_status != "cleared": raise HTTPException(status_code=400, detail="Student is not fully cleared yet")
+    # 1. Check if student exists and is fully cleared
+    student = db.query(Student).filter(Student.id == student_id).first()
+    if not student: raise HTTPException(status_code=404, detail="Student not found")
+    
+    clearance = db.query(ClearanceRequest).filter(ClearanceRequest.student_id == student.id).first()
+    if not clearance or clearance.overall_status != "cleared": 
+        raise HTTPException(status_code=400, detail="Student is not fully cleared yet")
+
+    # 2. Find or create the RegistryInventory record
+    certificate = db.query(RegistryInventory).filter(RegistryInventory.student_id == student.id).first()
+    
+    if not certificate:
+        # 🪄 MAGIC: Auto-create the inventory record if it doesn't exist yet!
+        cert_num = f"CERT-{student.student_id}-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+        certificate = RegistryInventory(
+            certificate_number=cert_num,
+            student_id=student.id,
+            programme=student.program,
+            graduation_year=str(datetime.utcnow().year),
+            storage_location="Main Registry Vault"
+        )
+        db.add(certificate)
+        db.commit()
+        db.refresh(certificate)
+        await log_audit(db, current_user.id, "CERTIFICATE_AUTO_ADDED", "registry", f"Auto-added certificate {cert_num} to inventory")
+
+    # 3. Mark as Ready
     certificate.status = CertificateStatus.READY_FOR_COLLECTION
+    certificate.marked_available_by = current_user.id
+    certificate.marked_available_at = datetime.utcnow()
     db.commit(); db.refresh(certificate)
+    
+    # 4. Send Notification
     notification = Notification(student_id=certificate.student_id, sender_id=current_user.id, notification_type=NotificationType.CLEARANCE_REQUEST, title="Certificate Ready for Collection", message="Your certificate is now ready for collection at the Registry office.")
     db.add(notification); db.commit()
+    
     await log_audit(db, current_user.id, "CERTIFICATE_MARKED_READY", "registry", f"Marked certificate {certificate.certificate_number} as ready for collection")
     return certificate
 
@@ -501,9 +530,9 @@ async def get_audit_logs(
 # ========================================
 
 @router.get("/stats/dashboard", response_model=ClearanceStatsResponse)
-async def get_clearance_stats(
+async def get_dashboard_stats(
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_any_permission([Permission.DASHBOARD_VIEW_STUDENT, Permission.DASHBOARD_VIEW_FINANCE, Permission.DASHBOARD_VIEW_EXAMINATION, Permission.DASHBOARD_VIEW_DEAN, Permission.DASHBOARD_VIEW_REGISTRY, Permission.DASHBOARD_VIEW_AUDITOR, Permission.DASHBOARD_VIEW_ADMIN]))
+    current_user: User = Depends(get_current_active_user)  # <--- FIXED: Any logged-in user can see the dashboard
 ):
     return ClearanceStatsResponse(
         total_students=db.query(Student).count(),

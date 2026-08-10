@@ -9,7 +9,7 @@ import { ClearanceRequest, ClearanceStatus, Student } from "../../types";
 import { CheckCircle, XCircle, Clock, BookOpen, GraduationCap, List, Search, Filter, X } from "lucide-react";
 
 export default function ExaminationClearancePage() {
-  const { user, hasPermission } = useAuth();
+  const { user, hasPermission, hasTask } = useAuth();
   const [requests, setRequests] = useState<ClearanceRequest[]>([]);
   const [allStudents, setAllStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
@@ -95,7 +95,7 @@ export default function ExaminationClearancePage() {
       <div className="flex">
         <Sidebar />
         <div className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          
+
           {/* Header */}
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8 gap-4">
             <div>
@@ -175,10 +175,21 @@ export default function ExaminationClearancePage() {
                           </td>
                           {viewMode === 'pending' && <td className="px-6 py-4 text-sm text-gray-700 dark:text-slate-300">{new Date(request.request_date).toLocaleDateString()}</td>}
                           <td className="px-6 py-4">
-                            {hasPermission(Permission.EXAM_APPROVE) ? (
+                            {(hasTask("exam_approve") || hasTask("exam:approve") || 
+                              hasTask("exam_reject") || hasTask("exam:reject")) ? (
                               <div className="flex gap-2">
-                                <button onClick={() => { setSelectedRequest(request); setAction("approve"); }} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors">Approve</button>
-                                <button onClick={() => { setSelectedRequest(request); setAction("reject"); }} className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-colors">Reject</button>
+                                {(hasTask("exam_approve") || hasTask("exam:approve")) && (
+                                  <button onClick={() => { setSelectedRequest(request); setAction("approve"); }} 
+                                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors">
+                                    Approve
+                                  </button>
+                                )}
+                                {(hasTask("exam_reject") || hasTask("exam:reject")) && (
+                                  <button onClick={() => { setSelectedRequest(request); setAction("reject"); }} 
+                                    className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition-colors">
+                                    Reject
+                                  </button>
+                                )}
                               </div>
                             ) : (
                               <span className="text-gray-500 dark:text-slate-500 text-xs italic">View Only</span>
@@ -227,7 +238,7 @@ export default function ExaminationClearancePage() {
                   </h2>
                   <button onClick={() => { setSelectedRequest(null); setAction(null); }} className="text-gray-500 dark:text-slate-500 hover:text-gray-900 dark:hover:text-white"><X className="h-5 w-5" /></button>
                 </div>
-                
+
                 <div className="bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl p-4 mb-5">
                   <p className="text-sm text-gray-500 dark:text-slate-400">Student</p>
                   <p className="text-base font-bold text-gray-900 dark:text-white">{selectedRequest.student?.first_name} {selectedRequest.student?.last_name}</p>

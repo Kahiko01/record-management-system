@@ -6,6 +6,7 @@ import TopBar from "../components/TopBar";
 import Sidebar from "../components/Sidebar";
 import { useAuth, Permission } from "../context/AuthContext";
 import { Package, Search, RefreshCw, CheckCircle, Clock, Archive, MapPin, Upload } from "lucide-react";
+import toast from 'react-hot-toast';
 
 export default function RegistryPage() {
   const { hasPermission, hasTask } = useAuth();
@@ -34,47 +35,78 @@ export default function RegistryPage() {
 
       // Only send params if there's something to filter
       const hasParams = Object.keys(params).length > 0;
-      
+
       const [inventoryRes, clearedRes] = await Promise.all([
         registryApi.getCertificates(hasParams ? params : undefined),
         clearanceApi.getClearedStudents(),
       ]);
       setInventory(inventoryRes.data || []);
       setClearedStudents(clearedRes.data || []);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to fetch registry data:", error);
+      if (error.response?.status === 422) {
+        toast.error("Invalid filter applied. Resetting filters...");
+        setFilters({ search: "", status: "" });
+        try {
+          const [inventoryRes, clearedRes] = await Promise.all([
+            registryApi.getCertificates(),
+            clearanceApi.getClearedStudents(),
+          ]);
+          setInventory(inventoryRes.data || []);
+          setClearedStudents(clearedRes.data || []);
+        } catch (retryError) {
+          toast.error("Failed to load registry data. Please try again.");
+        }
+      } else {
+        toast.error("Failed to fetch registry data. Please check your connection.");
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const handleMarkReady = async (studentId: number) => {
+    // 1. Show a loading toast while we wait for the backend
+    const loadingToast = toast.loading('Processing certificate...');
+
     try {
+      // 2. Call the API
       await registryApi.markReady(studentId);
-      fetchData();
-    } catch (error) {
-      console.error("Failed to mark certificate ready:", error);
-      alert("Failed to mark certificate ready.");
+      
+      // 3. Replace loading toast with a green success toast!
+      toast.success('✅ Certificate marked as ready for collection!', { id: loadingToast });
+      
+      // 4. Refresh the table data
+      fetchData(); 
+    } catch (error: any) {
+      // 5. If it fails, grab the exact error message from FastAPI
+      const errorMessage = error.response?.data?.detail || "Failed to mark certificate ready.";
+      
+      // 6. Show a red error toast
+      toast.error(`❌ Error: ${errorMessage}`, { id: loadingToast });
     }
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    
+
     const formData = new FormData();
     formData.append('file', file);
-    
+
+    const loadingToast = toast.loading('Uploading file...');
+
     try {
       // Add your upload API call here
       // await registryApi.uploadExcel(formData);
-      alert('File uploaded successfully!');
+      toast.success('✅ File uploaded successfully!', { id: loadingToast });
       fetchData();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Upload failed:', error);
-      alert('Failed to upload file');
+      const errorMessage = error.response?.data?.detail || 'Failed to upload file. Please check the format.';
+      toast.error(`❌ ${errorMessage}`, { id: loadingToast });
     }
-    
+
     // Reset the input so the same file can be uploaded again
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -92,6 +124,8 @@ export default function RegistryPage() {
         return <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-500/30">⏳ Awaiting Clearance</span>;
       case "in_storage":
         return <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400 border border-amber-200 dark:border-amber-500/30">🗄️ In Storage</span>;
+      case "on_hold":
+        return <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400 border border-red-200 dark:border-red-500/30">🚫 On Hold</span>;
       default:
         return <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-gray-100 text-gray-700 dark:bg-slate-500/20 dark:text-slate-400 border border-gray-200 dark:border-slate-500/30">{status || "Unknown"}</span>;
     }
@@ -121,8 +155,8 @@ export default function RegistryPage() {
                     accept=".xlsx,.xls,.csv"
                     className="hidden"
                   />
-                  <button 
-                    onClick={() => fileInputRef.current?.click()} 
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
                     className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl text-sm transition-colors shadow-lg shadow-blue-900/20"
                   >
                     <Upload className="h-4 w-4" /> Import Excel
@@ -150,35 +184,35 @@ export default function RegistryPage() {
             <div className="flex flex-col md:flex-row gap-4 items-end">
               <div className="flex-1">
                 <label className="block text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Search Name / Certificate No</label>
-                <input 
-                  type="text" 
-                  value={filters.search} 
-                  onChange={(e) => setFilters({ ...filters, search: e.target.value })} 
-                  onKeyPress={(e) => e.key === "Enter" && fetchData()} 
-                  placeholder="e.g. John or CERT/2024/001" 
-                  className="w-full px-4 py-2.5 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50" 
+                <input
+                  type="text"
+                  value={filters.search}
+                  onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+                  onKeyPress={(e) => e.key === "Enter" && fetchData()}
+                  placeholder="e.g. John or CERT/2024/001"
+                  className="w-full px-4 py-2.5 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
                 />
               </div>
               <div className="w-40">
                 <label className="block text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Status</label>
-                <select 
-                  value={filters.status} 
-                  onChange={(e) => setFilters({ ...filters, status: e.target.value })} 
+                <select
+                  value={filters.status}
+                  onChange={(e) => setFilters({ ...filters, status: e.target.value })}
                   className="w-full px-3 py-2.5 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
                 >
                   <option value="">All Status</option>
                   <option value="awaiting_clearance">Awaiting Clearance</option>
+                  <option value="in_storage">In Storage</option>
                   <option value="ready_for_collection">Ready for Collection</option>
                   <option value="collected">Collected</option>
-                  <option value="in_storage">In Storage</option>
                   <option value="on_hold">On Hold</option>
                 </select>
               </div>
               <button onClick={fetchData} className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl text-sm transition-colors shadow-lg shadow-emerald-900/20 flex items-center gap-2">
                 <Search className="h-4 w-4" /> Search
               </button>
-              <button 
-                onClick={() => { setFilters({ search: "", status: "" }); setTimeout(fetchData, 100); }} 
+              <button
+                onClick={() => { setFilters({ search: "", status: "" }); setTimeout(fetchData, 100); }}
                 className="px-4 py-2.5 text-sm font-medium text-rose-500 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl transition-colors flex items-center gap-2"
               >
                 Clear
@@ -186,7 +220,7 @@ export default function RegistryPage() {
             </div>
           </div>
 
-          {/* Inventory Table */}
+          {/* Inventory Table - UPDATED WITH ACTION COLUMN */}
           {activeTab === 'inventory' && (
             <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
@@ -198,11 +232,12 @@ export default function RegistryPage() {
                       <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Program</th>
                       <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Storage Location</th>
                       <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 dark:divide-slate-800">
                     {inventory.length === 0 ? (
-                      <tr><td colSpan={5} className="px-6 py-16 text-center text-gray-500 dark:text-slate-500"><Package className="h-12 w-12 text-emerald-500/30 mx-auto mb-3" /><p className="font-medium">No certificates found</p></td></tr>
+                      <tr><td colSpan={6} className="px-6 py-16 text-center text-gray-500 dark:text-slate-500"><Package className="h-12 w-12 text-emerald-500/30 mx-auto mb-3" /><p className="font-medium">No certificates found</p></td></tr>
                     ) : (
                       inventory.map((cert: any) => (
                         <tr key={cert.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/30 transition-colors">
@@ -219,6 +254,13 @@ export default function RegistryPage() {
                             <p className="text-gray-700 dark:text-slate-300 flex items-center gap-1"><MapPin className="h-3 w-3" /> {cert.storage_location || "N/A"}</p>
                           </td>
                           <td className="px-6 py-4">{getStatusBadge(cert.status)}</td>
+                          <td className="px-6 py-4">
+                            {hasPermission(Permission.REGISTRY_MARK_AVAILABLE) && cert.status !== "collected" && cert.status !== "ready_for_collection" && (
+                              <button onClick={() => handleMarkReady(cert.student_id || cert.student?.id)} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-colors">
+                                Mark Ready
+                              </button>
+                            )}
+                          </td>
                         </tr>
                       ))
                     )}

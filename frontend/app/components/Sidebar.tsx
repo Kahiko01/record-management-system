@@ -1,143 +1,163 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "../context/AuthContext";
-import {
-  LayoutDashboard, Shield, BarChart3, Eye,
-  DollarSign, BookOpen, GraduationCap,
-  Package, FileText, MapPin,
-  ScrollText, ClipboardList,
-  Users, Settings, ChevronDown, ChevronRight, UserCog
+import { 
+  LayoutDashboard, DollarSign, BookOpen, GraduationCap, Archive, 
+  Users, ShieldCheck, Activity, Home, LogOut, FileSpreadsheet,
+  Wallet, Package, Database, UserPlus, Server, ChevronDown, Menu, X
 } from "lucide-react";
-
-const menuSections = [
-  {
-    title: "Overview",
-    items: [
-      { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["all"] },
-      { name: "System Monitor", href: "/admin/monitoring", icon: Shield, roles: ["super_admin", "internal_auditor"] },
-      { name: "Analytics", href: "/admin/analytics", icon: BarChart3, roles: ["super_admin", "internal_auditor"] },
-    ],
-  },
-  {
-    title: "Clearance",
-    items: [
-      { name: "Overview", href: "/clearance/overview", icon: Eye, roles: ["super_admin", "finance", "examination_office", "dean", "registry_officer", "internal_auditor"] },
-      { name: "Finance", href: "/clearance/finance", icon: DollarSign, roles: ["super_admin", "finance"] },
-      { name: "Examination", href: "/clearance/examination", icon: BookOpen, roles: ["super_admin", "examination_office"] },
-      { name: "Dean Approval", href: "/clearance/dean", icon: GraduationCap, roles: ["super_admin", "dean"] },
-    ],
-  },
-  {
-    title: "Finance",
-    items: [
-      { name: "Fee Balances", href: "/finance/balances", icon: DollarSign, roles: ["super_admin", "finance", "internal_auditor"] },
-      { name: "Payment Upload", href: "/finance/payments", icon: FileText, roles: ["super_admin", "finance"] },
-    ],
-  },
-  {
-    title: "Registry",
-    items: [
-      { name: "Registry Office", href: "/registry", icon: Package, roles: ["super_admin", "registry_officer"] },
-      { name: "Collections", href: "/registry/collections", icon: ClipboardList, roles: ["super_admin", "registry_officer", "internal_auditor"] },
-      { name: "Storage", href: "/storage", icon: MapPin, roles: ["super_admin", "registry_officer"] },
-    ],
-  },
-  {
-    title: "Audit",
-    items: [
-      { name: "Audit Logs", href: "/admin/audit", icon: ScrollText, roles: ["super_admin", "internal_auditor"] },
-      { name: "Reports", href: "/audit/reports", icon: BarChart3, roles: ["super_admin", "internal_auditor"] },
-    ],
-  },
-  {
-    title: "Admin",
-    items: [
-      { name: "Students", href: "/admin/students", icon: Users, roles: ["super_admin"] },
-      { name: "Users", href: "/admin/users", icon: UserCog, roles: ["super_admin"] },
-    ],
-  },
-];
+import { useState } from "react";
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { user } = useAuth();
-  const [collapsedSections, setCollapsedSections] = useState<string[]>([]);
+  const { user, hasTask, logout } = useAuth();
+  const [collapsed, setCollapsed] = useState(false);
 
-  const canAccess = (roles: string[]) => {
-    if (roles.includes("all")) return true;
-    // Use the exact role string from the database/AuthContext
-    return roles.includes(user?.role || "");
+  const hasAnyTask = (tasks: string[]) => {
+    if (!user) return false;
+    if (user.role === "super_admin" || user.role === "admin") return true;
+    if (tasks.length === 0) return true;
+    return tasks.some(task => hasTask(task));
   };
+
+  const menuSections = [
+    {
+      title: null,
+      items: [
+        { name: "Dashboard", href: "/dashboard", icon: Home, tasks: [] },
+        { name: "Clearance Overview", href: "/clearance/overview", icon: LayoutDashboard, tasks: [] },
+      ]
+    },
+    {
+      title: "Finance",
+      items: [
+        { name: "Fee Balances", href: "/finance/balances", icon: Wallet, 
+          tasks: ["finance_view_dashboard", "finance_view_reports"] },
+        { name: "Payment Upload", href: "/finance/payments", icon: FileSpreadsheet, 
+          tasks: ["finance_upload", "finance_data_entry"] },
+        { name: "Clearance Queue", href: "/clearance/finance", icon: DollarSign, 
+          tasks: ["finance_view_dashboard", "finance_approve", "finance_reject"] },
+      ]
+    },
+    {
+      title: "Academics",
+      items: [
+        { name: "Examination", href: "/clearance/examination", icon: BookOpen, 
+          tasks: ["exam_view_dashboard", "exam_approve", "exam_reject"] },
+        { name: "Dean Review", href: "/clearance/dean", icon: GraduationCap, 
+          tasks: ["dean_view_dashboard", "dean_approve", "dean_reject", "dean_review"] },
+      ]
+    },
+    {
+      title: "Registry",
+      items: [
+        { name: "Registry Office", href: "/registry", icon: Archive, 
+          tasks: ["registry_view_dashboard", "registry_approve", "registry_data_entry"] },
+        { name: "Collections", href: "/registry/collections", icon: Package, 
+          tasks: ["registry_view_dashboard", "registry_approve"] },
+        { name: "Storage", href: "/storage", icon: Database, 
+          tasks: ["registry_view_dashboard", "registry_data_entry"] },
+      ]
+    },
+    {
+      title: "Admin",
+      items: [
+        { name: "Students", href: "/admin/students", icon: UserPlus, 
+          tasks: ["user_view", "user_create"] },
+        { name: "Users & Roles", href: "/admin/users", icon: Users, 
+          tasks: ["user_view", "user_create", "user_assign_role"] },
+        { name: "Audit Logs", href: "/admin/audit", icon: ShieldCheck, 
+          tasks: ["auditor_view_logs", "auditor_export_reports"] },
+        { name: "System Monitor", href: "/admin/monitoring", icon: Server, 
+          tasks: ["admin_view_all_logs", "admin_configure_system"] },
+      ]
+    },
+  ];
 
   const visibleSections = menuSections
-    .map((section) => ({
+    .map(section => ({
       ...section,
-      items: section.items.filter((item) => canAccess(item.roles)),
+      items: section.items.filter(item => hasAnyTask(item.tasks))
     }))
-    .filter((section) => section.items.length > 0);
-
-  const toggleSection = (title: string) => {
-    setCollapsedSections((prev) =>
-      prev.includes(title) ? prev.filter((s) => s !== title) : [...prev, title]
-    );
-  };
+    .filter(section => section.items.length > 0);
 
   return (
-    <aside className="w-64 bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 min-h-[calc(100vh-4rem)] flex flex-col">
-      <div className="px-4 py-3 border-b border-gray-200 dark:border-slate-800">
-        <div className="flex items-center gap-2">
-          <div className="p-1.5 bg-emerald-50 dark:bg-emerald-950/60 rounded-lg">
-            <LayoutDashboard className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+    <aside className={`min-h-screen bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 flex flex-col shadow-sm transition-all duration-300 ${collapsed ? 'w-16' : 'w-64'}`}>
+      
+      {/* Navigation Bar Header */}
+      <div className="p-4 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between">
+        {!collapsed && (
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center">
+              <ShieldCheck className="h-5 w-5 text-white" />
+            </div>
+            <span className="text-lg font-bold text-gray-900 dark:text-white">Navigation</span>
           </div>
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-400 leading-none">Navigation</p>
-            <p className="text-[9px] text-gray-400 dark:text-slate-500 font-medium">Clearance Portal</p>
-          </div>
-        </div>
+        )}
+        <button 
+          onClick={() => setCollapsed(!collapsed)}
+          className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-500 dark:text-slate-400 transition-colors"
+        >
+          {collapsed ? <Menu className="h-5 w-5" /> : <X className="h-5 w-5" />}
+        </button>
       </div>
 
-      <nav className="flex-1 px-3 py-3 space-y-1 overflow-y-auto">
-        {visibleSections.map((section) => {
-          const isCollapsed = collapsedSections.includes(section.title);
-          return (
-            <div key={section.title} className="mb-1.5">
-              <button onClick={() => toggleSection(section.title)} className="flex items-center justify-between w-full px-2.5 py-1.5 text-[9px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider hover:text-gray-600 dark:hover:text-slate-300 transition-colors rounded">
-                <span>{section.title}</span>
-                {isCollapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-              </button>
-              {!isCollapsed && (
-                <div className="mt-0.5 space-y-0.5">
-                  {section.items.map((item) => {
-                    const isActive = pathname === item.href;
-                    const Icon = item.icon;
-                    return (
-                      <Link key={item.href} href={item.href} className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-medium transition-all duration-200 ${isActive ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/50" : "text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-gray-900 dark:hover:text-white"}`}>
-                        <Icon className={`h-4 w-4 shrink-0 ${isActive ? "text-emerald-600 dark:text-emerald-400" : "text-gray-400 dark:text-slate-500"}`} />
-                        <span className="truncate">{item.name}</span>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
+      {/* Navigation Links */}
+      <nav className="flex-1 p-3 space-y-4 overflow-y-auto">
+        {visibleSections.map((section, idx) => (
+          <div key={idx}>
+            {section.title && !collapsed && (
+              <h3 className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider mb-2 px-3">
+                {section.title}
+              </h3>
+            )}
+            <div className="space-y-1">
+              {section.items.map((item) => {
+                const isActive = pathname === item.href;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    title={item.name}
+                    className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                      isActive
+                        ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800"
+                        : "text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800/50"
+                    } ${collapsed ? 'justify-center' : ''}`}
+                  >
+                    <item.icon className="h-4 w-4 shrink-0" />
+                    {!collapsed && <span>{item.name}</span>}
+                  </Link>
+                );
+              })}
             </div>
-          );
-        })}
+          </div>
+        ))}
       </nav>
 
-      <div className="px-4 py-3 border-t border-gray-200 dark:border-slate-800">
-        <div className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg bg-gray-50 dark:bg-slate-800/50">
-          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/80 text-emerald-700 dark:text-emerald-300 font-bold text-xs border border-emerald-200 dark:border-emerald-700">
-            {user?.username?.charAt(0).toUpperCase() || "U"}
+      {/* User & Logout */}
+      <div className="p-3 border-t border-gray-200 dark:border-slate-800">
+        {!collapsed && user && (
+          <div className="flex items-center gap-3 mb-3 px-2">
+            <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-700 dark:text-emerald-400 font-bold text-sm">
+              {user.username?.charAt(0).toUpperCase()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{user.username}</p>
+              <p className="text-xs text-gray-500 dark:text-slate-400 truncate capitalize">{user.role?.replace(/_/g, ' ')}</p>
+            </div>
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-[10px] font-semibold text-gray-900 dark:text-white leading-tight">{user?.username || "Guest"}</p>
-            <p className="truncate text-[9px] font-medium text-emerald-600 dark:text-emerald-400 leading-tight">{user?.role?.replace("_", " ") || "User"}</p>
-          </div>
-        </div>
-        <p className="mt-2 text-[9px] text-gray-400 dark:text-slate-600 text-center font-mono">v2.0</p>
+        )}
+        <button
+          onClick={logout}
+          title="Logout"
+          className={`w-full flex items-center justify-center gap-2 px-3 py-2 bg-rose-50 dark:bg-rose-900/20 hover:bg-rose-100 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-400 rounded-xl text-sm font-medium transition-colors ${collapsed ? '' : ''}`}
+        >
+          <LogOut className="h-4 w-4" />
+          {!collapsed && <span>Logout</span>}
+        </button>
       </div>
     </aside>
   );

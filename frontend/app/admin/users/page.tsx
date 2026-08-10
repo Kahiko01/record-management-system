@@ -55,8 +55,13 @@ export default function AdminUsersPage() {
     try {
       const response = await userApi.getAll(filters);
       setUsers(response.data || []);
-    } catch (error) {
-      console.error("Failed to fetch users:", error);
+    } catch (error: any) {
+      if (error.response?.status === 403) {
+        alert("Access Denied: You do not have permission to manage users.");
+      } else {
+        console.error("Failed to fetch users:", error);
+      }
+      setUsers([]); // Clear the table so it doesn't crash
     } finally {
       setLoading(false);
     }
@@ -68,10 +73,18 @@ export default function AdminUsersPage() {
         userApi.getRoles(),
         userApi.getTasks(),
       ]);
-      setRoles(rolesRes.data || []);
+      // Filter out roles without id or name
+      const validRoles = (rolesRes.data || []).filter((r: any) => r.id && r.name);
+      setRoles(validRoles);
       setTasks(tasksRes.data || []);
-    } catch (error) {
-      console.error("Failed to fetch master data:", error);
+    } catch (error: any) {
+      if (error.response?.status === 403) {
+        console.log("Access Denied: You do not have permission to view roles and tasks.");
+        setRoles([]);
+        setTasks([]);
+      } else {
+        console.error("Failed to fetch master data:", error);
+      }
     }
   };
 
@@ -171,6 +184,14 @@ export default function AdminUsersPage() {
     return acc;
   }, {});
 
+  // Smart Role Formatter: turns "registry_officer" into "Registry Officer"
+  const formatRoleName = (role: string) => {
+    if (!role) return "Unknown";
+    return role
+      .replace(/_/g, " ")           // Replace underscores with spaces
+      .replace(/\b\w/g, l => l.toUpperCase()); // Capitalize first letter of each word
+  };
+
   const getRoleBadge = (role: string) => {
     switch (role) {
       case "super_admin": return <span className="px-2.5 py-1 text-[10px] font-bold rounded-full bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-400 border border-purple-200 dark:border-purple-500/30">Super Admin</span>;
@@ -264,7 +285,12 @@ export default function AdminUsersPage() {
                           <p className="text-xs text-gray-500 dark:text-slate-500">ID: {user.id}</p>
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-700 dark:text-slate-300">{user.email || "N/A"}</td>
-                        <td className="px-6 py-4">{getRoleBadge(user.role)}</td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            {getRoleBadge(user.role)}
+                            <span className="text-xs text-gray-500 dark:text-slate-400">({formatRoleName(user.role)})</span>
+                          </div>
+                        </td>
                         <td className="px-6 py-4 text-right">
                           {hasPermission(Permission.USER_ASSIGN_ROLE) && (
                             <button onClick={() => openPermissionsModal(user)} className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-colors">
@@ -312,23 +338,23 @@ export default function AdminUsersPage() {
               {activeTab === 'roles' && (
                 <div className="space-y-3">
                   <p className="text-xs text-gray-500 dark:text-slate-400 mb-2">Assign base roles. Toggle "Uploader" to allow bulk Excel imports for that department.</p>
-                  {roles.map((role) => {
-                    const isAssigned = assignedRoles.find(r => r.role_id === role.id);
+                  {roles.map((role, index) => {
+                    const isAssigned = assignedRoles.find(r => r.role_id === (role.id || role.value));
                     return (
-                      <div key={role.id} className={`p-3 rounded-xl border transition-colors ${isAssigned ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/10' : 'border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950'}`}>
+                      <div key={role.id || role.value || `fallback-${index}`} className={`p-3 rounded-xl border transition-colors ${isAssigned ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/10' : 'border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-950'}`}>
                         <div className="flex items-center justify-between">
                           <label className="flex items-center gap-3 cursor-pointer">
-                            <input type="checkbox" checked={!!isAssigned} onChange={() => toggleRole(role.id)} className="w-4 h-4 rounded bg-slate-800 border-slate-700 text-emerald-500 focus:ring-emerald-500/50" />
+                            <input type="checkbox" checked={!!isAssigned} onChange={() => toggleRole(role.id || role.value)} className="w-4 h-4 rounded bg-slate-800 border-slate-700 text-emerald-500 focus:ring-emerald-500/50" />
                             <div>
-                              <p className="text-sm font-bold text-gray-900 dark:text-white">{role.display_name}</p>
-                              <p className="text-[10px] text-gray-500 dark:text-slate-400 uppercase">{role.department}</p>
+                              <p className="text-sm font-bold text-gray-900 dark:text-white">{role.display_name || role.name || role.label}</p>
+                              <p className="text-[10px] text-gray-500 dark:text-slate-400 uppercase">{role.department || "General"}</p>
                             </div>
                           </label>
                           {isAssigned && (
                             <label className="flex items-center gap-2 cursor-pointer">
                               <Upload className="h-3.5 w-3.5 text-blue-500" />
                               <span className="text-[10px] font-bold text-gray-600 dark:text-slate-300 uppercase">Uploader</span>
-                              <input type="checkbox" checked={isAssigned.is_department_uploader} onChange={() => toggleUploader(role.id)} className="w-3.5 h-3.5 rounded bg-slate-800 border-slate-700 text-blue-500 focus:ring-blue-500/50" />
+                              <input type="checkbox" checked={isAssigned.is_department_uploader} onChange={() => toggleUploader(role.id || role.value)} className="w-3.5 h-3.5 rounded bg-slate-800 border-slate-700 text-blue-500 focus:ring-blue-500/50" />
                             </label>
                           )}
                         </div>
