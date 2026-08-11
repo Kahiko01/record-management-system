@@ -56,7 +56,7 @@ export default function SystemMonitorPage() {
   }, []);
 
   const handleLockdown = async () => {
-    if (!confirm("⚠️ WARNING: Initiate System Lockdown Protocol? This will flag all active sessions for termination.")) return;
+    if (!confirm("⚠ WARNING: Initiate System Lockdown Protocol? This will flag all active sessions for termination.")) return;
     try {
       await monitoringApi.initiateLockdown();
       setLockdownMode(true);
@@ -115,7 +115,7 @@ export default function SystemMonitorPage() {
 
           {lockdownMode && (
             <div className="mb-4 p-3 bg-rose-500/20 border border-rose-500 rounded-xl text-center">
-              <p className="text-rose-300 font-bold font-mono animate-pulse">⚠️ LOCKDOWN PROTOCOL ACTIVE // ALL SESSIONS FLAGGED FOR TERMINATION ⚠️</p>
+              <p className="text-rose-300 font-bold font-mono animate-pulse">⚠ LOCKDOWN PROTOCOL ACTIVE // ALL SESSIONS FLAGGED FOR TERMINATION ⚠</p>
             </div>
           )}
 

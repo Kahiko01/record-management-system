@@ -244,7 +244,7 @@ ADM/2024/003,60000,60000`;
                   <p className="text-sm text-gray-700 dark:text-slate-300">{uploadResult.message}</p>
                   {uploadResult.updated !== undefined && (
                     <div className="flex gap-4 mt-2 text-xs font-medium">
-                      <span className="text-emerald-700 dark:text-emerald-400">✅ {uploadResult.updated} Updated</span>
+                      <span className="text-emerald-700 dark:text-emerald-400"> {uploadResult.updated} Updated</span>
                       <span className="text-blue-700 dark:text-blue-400">➕ {uploadResult.created} Created</span>
                       {uploadResult.auto_cleared !== undefined && (
                         <span className="text-purple-700 dark:text-purple-400">🚀 {uploadResult.auto_cleared} Auto-Cleared</span>
@@ -274,7 +274,7 @@ ADM/2024/003,60000,60000`;
                 onClick={downloadTemplate}
                 className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-colors"
               >
-                ⬇️ Download CSV Template
+                ⬇ Download CSV Template
               </button>
             </div>
             <p className="text-xs text-blue-800 dark:text-blue-400 mb-2">Your Excel or CSV file must contain the following exact column headers:</p>

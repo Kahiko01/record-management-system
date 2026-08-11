@@ -53,7 +53,10 @@ export const studentApi = {
 export const clearanceApi = {
   requestClearance: (studentId: number) => api.post('/clearance/request', { student_id: studentId }),
   getMyStatus: () => api.get('/clearance/my-status'),
-  getFinancePending: (params?: any) => api.get('/clearance/finance/pending', { params }),
+  getTrend: () => api.get('/clearance/stats/trend'),
+   getPrograms: () => api.get('/clearance/stats/programs'),
+   getBottlenecks: () => api.get('/clearance/stats/bottlenecks'),  
+   getFinancePending: (params?: any) => api.get('/clearance/finance/pending', { params }),
   uploadPayments: (data: any[]) => api.post('/clearance/finance/bulk-payments', data),
   updateFinanceClearance: (clearanceId: number, data: any) => api.put(`/clearance/finance/${clearanceId}`, data),
   getExaminationPending: (params?: any) => api.get('/clearance/examination/pending', { params }),
@@ -70,10 +73,9 @@ export const registryApi = {
   updateCertificate: (id: number, data: any) => api.put(`/clearance/registry/inventory/${id}`, data),
   getCollectionsReport: () => api.get('/clearance/registry/collections-report'),
   getCertificates: (params?: any) => api.get('/clearance/registry/inventory', { params }),
-  markReady: (studentId: number) => api.put(`/clearance/registry/mark-ready/${studentId}`), // ✅ Updated to use studentId
+  markReady: (studentId: number) => api.put(`/clearance/registry/mark-ready/${studentId}`),
 };
 
-// ✅ CORRECTED: Notification API with proper endpoint paths
 export const notificationApi = {
   getNotifications: () => api.get('/clearance/notifications'),
   markRead: (id: number) => api.put(`/clearance/notifications/${id}`),
@@ -106,7 +108,6 @@ export const auditApi = {
   getLogs: () => api.get('/clearance/audit/logs'),
 };
 
-// === USER MANAGEMENT API ===
 export const userApi = {
   getAll: (params?: any) => api.get('/users', { params }),
   create: (data: any) => api.post('/users/', data),
@@ -122,15 +123,11 @@ export const userApi = {
   updateTasks: (userId: number, data: any[]) => api.put(`/users/${userId}/tasks`, data),
 };
 
-// === NEW: FEE BALANCE API ===
 export const feeApi = {
   getBalances: (params?: any) => api.get('/clearance/finance/balances', { params }),
   getSummary: () => api.get('/clearance/finance/balance-summary'),
 };
 
-export default api;
-
-// === MILITARY GRADE MONITORING API ===
 export const monitoringApi = {
   getHealth: () => api.get('/admin/monitoring/health'),
   getActivity: (limit?: number) => api.get('/admin/monitoring/activity', { params: { limit: limit || 50 } }),
@@ -140,3 +137,5 @@ export const monitoringApi = {
   getDatabaseTopography: () => api.get('/admin/monitoring/database/topography'),
   initiateLockdown: () => api.post('/admin/monitoring/lockdown'),
 };
+
+export default api;

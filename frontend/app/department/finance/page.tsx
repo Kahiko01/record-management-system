@@ -107,13 +107,13 @@ export default function FinanceDepartment() {
                         onClick={() => handleAction(student.student_id, "approve")}
                         className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 text-sm mr-2"
                       >
-                        ✅ Approve
+                         Approve
                       </button>
                       <button
                         onClick={() => handleAction(student.student_id, "reject")}
                         className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm"
                       >
-                        ❌ Reject
+                         Reject
                       </button>
                     </td>
                   </tr>

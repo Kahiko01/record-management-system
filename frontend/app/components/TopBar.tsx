@@ -3,8 +3,9 @@
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
-import { LogOut, Sun, Moon, Bell, Check, X, Inbox, Command as CommandIcon } from "lucide-react";
+import { LogOut, Sun, Moon, Bell, Check, X, Inbox, Command as CommandIcon, CheckCircle2, XCircle, Info, Award } from "lucide-react";
 import CommandPalette from "./CommandPalette";
+import SessionGuard from "./SessionGuard";
 import useWebSocket from 'react-use-websocket';
 import toast from 'react-hot-toast';
 import { notificationApi } from "../lib/api";
@@ -20,7 +21,7 @@ export default function TopBar() {
 
   // 🚀 WEEK 1: Connect to Live WebSocket Feed based on user role
   const wsUrl = user ? `ws://localhost:8000/ws/${user.role}` : null;
-  
+
   useWebSocket(wsUrl, {
     onMessage: (event) => {
       try {
@@ -81,10 +82,18 @@ export default function TopBar() {
 
   const getIconForType = (type: string) => {
     switch (type) {
-      case "approval": return "✅";
-      case "rejection": return "❌";
-      case "info": return "ℹ️";
-      default: return "🔔";
+      case "clearance_request": return <Bell className="h-5 w-5 text-amber-500" />;
+      case "finance_approved": return <CheckCircle2 className="h-5 w-5 text-emerald-500" />;
+      case "finance_rejected": return <XCircle className="h-5 w-5 text-rose-500" />;
+      case "examination_approved": return <CheckCircle2 className="h-5 w-5 text-emerald-500" />;
+      case "examination_rejected": return <XCircle className="h-5 w-5 text-rose-500" />;
+      case "certificate_available": return <Award className="h-5 w-5 text-blue-500" />;
+      case "appointment_confirmed": return <CheckCircle2 className="h-5 w-5 text-purple-500" />;
+      case "certificate_collected": return <Award className="h-5 w-5 text-purple-500" />;
+      case "approval": return <CheckCircle2 className="h-5 w-5 text-emerald-500" />;
+      case "rejection": return <XCircle className="h-5 w-5 text-rose-500" />;
+      case "info": return <Info className="h-5 w-5 text-blue-500" />;
+      default: return <Bell className="h-5 w-5 text-slate-500" />;
     }
   };
 
@@ -103,15 +112,18 @@ export default function TopBar() {
       {/* 🚀 WEEK 2: Command Palette (Ctrl+K) */}
       <CommandPalette />
 
+      {/* 🔒 Session Timeout Guard */}
+      <SessionGuard />
+
       <header className="h-16 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between px-6 shadow-sm relative z-40">
-        
+
         {/* LEFT SIDE: Logo & Command Trigger */}
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2.5">
-            <img 
-              src="/logo.png" 
-              alt="KNP Digital Office Logo" 
-              className="h-8 w-auto object-contain" 
+            <img
+              src="/logo.png"
+              alt="KNP Digital Office Logo"
+              className="h-8 w-auto object-contain"
             />
             <h2 className="text-lg font-bold text-gray-900 dark:text-white tracking-tight hidden sm:block">
               KNP Digital Office
@@ -131,7 +143,7 @@ export default function TopBar() {
 
         {/* RIGHT SIDE: Notifications, Theme, Profile, Logout */}
         <div className="flex items-center gap-4">
-          
+
           {/* Notification Bell */}
           <div className="relative" ref={dropdownRef}>
             <button
@@ -169,7 +181,7 @@ export default function TopBar() {
                   ) : (
                     notifications.map((n) => (
                       <div key={n.id} className={`flex items-start gap-3 p-4 border-b border-gray-100 dark:border-slate-800 last:border-b-0 transition-colors ${!n.is_read ? 'bg-blue-50/50 dark:bg-blue-900/10' : 'bg-white dark:bg-slate-900'}`}>
-                        <span className="text-lg mt-0.5">{getIconForType(n.type)}</span>
+                        <span className="flex-shrink-0 mt-0.5">{getIconForType(n.type)}</span>
                         <div className="flex-1 min-w-0">
                           <p className={`text-sm ${!n.is_read ? 'font-bold text-gray-900 dark:text-white' : 'font-medium text-gray-700 dark:text-slate-300'}`}>
                             {n.title}

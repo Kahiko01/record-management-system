@@ -104,7 +104,7 @@ export default function VerifyCertificatePage() {
                 <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 mb-4">
                   <CheckCircle2 className="h-8 w-8" />
                 </div>
-                <h3 className="text-xl font-bold text-emerald-800 dark:text-emerald-300 mb-2">✅ Certificate Verified</h3>
+                <h3 className="text-xl font-bold text-emerald-800 dark:text-emerald-300 mb-2"> Certificate Verified</h3>
                 <p className="text-sm text-emerald-600 dark:text-emerald-400 mb-6">This certificate is authentic and issued by KNP Digital Office.</p>
 
                 <div className="bg-white dark:bg-slate-900 rounded-xl border border-emerald-200/60 dark:border-emerald-800/60 p-5 text-left space-y-3">
@@ -135,7 +135,7 @@ export default function VerifyCertificatePage() {
                 <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400 mb-4">
                   <XCircle className="h-8 w-8" />
                 </div>
-                <h3 className="text-xl font-bold text-rose-800 dark:text-rose-300 mb-2">❌ Certificate Not Found</h3>
+                <h3 className="text-xl font-bold text-rose-800 dark:text-rose-300 mb-2"> Certificate Not Found</h3>
                 <p className="text-sm text-rose-600 dark:text-rose-400">{result.message}</p>
               </>
             )}

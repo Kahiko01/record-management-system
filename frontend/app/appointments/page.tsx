@@ -207,7 +207,7 @@ export default function AppointmentBooking() {
                   {bookingSuccess && (
                     <div className="bg-green-50 border border-green-200 rounded-lg p-3">
                       <p className="text-green-700 text-sm font-medium">
-                        ✅ Appointment booked successfully!
+                         Appointment booked successfully!
                       </p>
                     </div>
                   )}

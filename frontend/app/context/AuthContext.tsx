@@ -198,7 +198,7 @@ export const ROLE_MENUS: Record<string, MenuItem[]> = {
   student: [
     { title: "Student Dashboard", icon: "📊", path: "/dashboard", permissions: [Permission.DASHBOARD_VIEW_STUDENT] },
     { title: "Clearance Status", icon: "📋", path: "/student", permissions: [Permission.STUDENT_VIEW_CLEARANCE_PROGRESS] },
-    { title: "Notifications", icon: "🔔", path: "/notifications", permissions: [Permission.STUDENT_VIEW_OWN_NOTIFICATIONS] },
+    { title: "Notifications", icon: "", path: "/notifications", permissions: [Permission.STUDENT_VIEW_OWN_NOTIFICATIONS] },
   ],
   finance: [
     { title: "Finance Dashboard", icon: "📊", path: "/dashboard", permissions: [Permission.DASHBOARD_VIEW_FINANCE] },
@@ -221,7 +221,7 @@ export const ROLE_MENUS: Record<string, MenuItem[]> = {
   ],
   registry_officer: [
     { title: "Registry Dashboard", icon: "📊", path: "/dashboard", permissions: [Permission.DASHBOARD_VIEW_REGISTRY] },
-    { title: "Registry Office", icon: "🏛️", path: "/registry", permissions: [Permission.REGISTRY_VIEW_INVENTORY] },
+    { title: "Registry Office", icon: "🏛", path: "/registry", permissions: [Permission.REGISTRY_VIEW_INVENTORY] },
     { title: "Fee Balances", icon: "💰", path: "/finance/balances", permissions: [Permission.REGISTRY_VIEW_INVENTORY] },
     { title: "Collections Report", icon: "📑", path: "/registry/collections", permissions: [Permission.REGISTRY_VIEW_REPORTS] },
     { title: "Inventory Records", icon: "📦", path: "/storage", permissions: [Permission.STORAGE_VIEW] },
@@ -231,7 +231,7 @@ export const ROLE_MENUS: Record<string, MenuItem[]> = {
     { title: "Audit Logs", icon: "🔍", path: "/audit/logs", permissions: [Permission.AUDITOR_VIEW_LOGS] },
     { title: "Fee Balances", icon: "💰", path: "/finance/balances", permissions: [Permission.AUDITOR_VIEW_REPORTS] },
     { title: "Student Records", icon: "🎓", path: "/admin/students", permissions: [Permission.AUDITOR_VIEW_REPORTS] },
-    { title: "Export Hub", icon: "📥", path: "/audit/reports", permissions: [Permission.AUDITOR_EXPORT_REPORTS] },
+    { title: "Export Hub", icon: "", path: "/audit/reports", permissions: [Permission.AUDITOR_EXPORT_REPORTS] },
     { title: "Inventory Records", icon: "📦", path: "/storage", permissions: [Permission.STORAGE_VIEW] },
   ],
   super_admin: [
@@ -239,13 +239,13 @@ export const ROLE_MENUS: Record<string, MenuItem[]> = {
     { title: "Finance Clearance", icon: "💰", path: "/clearance/finance", permissions: [Permission.FINANCE_VIEW_PENDING] },
     { title: "Exam Clearance", icon: "📝", path: "/clearance/examination", permissions: [Permission.EXAM_VIEW_PENDING] },
     { title: "Dean Reviews", icon: "🎓", path: "/clearance/dean", permissions: [Permission.DEAN_VIEW_PENDING] },
-    { title: "Registry Office", icon: "🏛️", path: "/registry", permissions: [Permission.REGISTRY_VIEW_INVENTORY] },
+    { title: "Registry Office", icon: "🏛", path: "/registry", permissions: [Permission.REGISTRY_VIEW_INVENTORY] },
     { title: "Fee Balances", icon: "💰", path: "/finance/balances", permissions: [Permission.ADMIN_VIEW_ALL_REPORTS] },
     { title: "Payment Upload", icon: "💳", path: "/finance/payments", permissions: [Permission.ADMIN_VIEW_ALL_REPORTS] },
     { title: "Student Management", icon: "🎓", path: "/admin/students", permissions: [Permission.USER_CREATE] },
     { title: "Manage Users", icon: "👤", path: "/admin/users", permissions: [Permission.USER_VIEW] },
     { title: "Audit Logs", icon: "🔍", path: "/admin/audit", permissions: [Permission.ADMIN_VIEW_ALL_LOGS] },
-    { title: "Export Hub", icon: "📥", path: "/audit/reports", permissions: [Permission.ADMIN_VIEW_ALL_REPORTS] },
+    { title: "Export Hub", icon: "", path: "/audit/reports", permissions: [Permission.ADMIN_VIEW_ALL_REPORTS] },
     { title: "Inventory Records", icon: "📦", path: "/storage", permissions: [Permission.STORAGE_VIEW] },
   ],
 };

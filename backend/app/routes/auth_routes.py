@@ -1,7 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from datetime import timedelta
+from collections import defaultdict
+import time
 from ..core.database import get_db
 from ..models.models import User
 from ..schemas.schemas import UserCreate, UserResponse, Token
@@ -14,6 +16,15 @@ from ..utils.audit import log_audit
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 from ..core.permissions import require_permission, Permission
+
+# 🛡️ WEEK 5: Login rate limiting (max 5 attempts per 60 seconds per IP)
+_login_attempts = defaultdict(list)
+
+def _rate_limited(ip: str) -> bool:
+    now = time.time()
+    recent = [t for t in _login_attempts[ip] if now - t < 60]
+    _login_attempts[ip] = recent
+    return len(recent) >= 5
 
 @router.post("/register", response_model=UserResponse)
 async def register_user(
@@ -49,14 +60,24 @@ async def register_user(
 
 @router.post("/login")
 def login(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ):
+    # 🛡️ Rate limiting check
+    if _rate_limited(request.client.host):
+        raise HTTPException(
+            status_code=429, 
+            detail="Too many login attempts. Please wait a minute before trying again."
+        )
+
     # 1. Find the user by username
     user = db.query(User).filter(User.username == form_data.username).first()
 
     # 2. Verify the password
     if not user or not verify_password(form_data.password, user.hashed_password):
+        # Record failed attempt
+        _login_attempts[request.client.host].append(time.time())
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
@@ -71,7 +92,6 @@ def login(
     access_token = create_access_token(data={"sub": user.username})
 
     # 5. Safely get the role name for the frontend
-    # Checks the new active_role first, falls back to the old string role
     role_name = "student"
     if user.active_role:
         role_name = user.active_role.name
@@ -84,14 +104,17 @@ def login(
         UserTask.user_id == user.id,
         UserTask.is_enabled == True
     ).all()
-    
+
     granted_task_codes = []
     for ut in user_tasks:
         task = db.query(Task).filter(Task.id == ut.task_id).first()
         if task:
             granted_task_codes.append(task.code)
 
-    # 7. Return a CLEAN dictionary (Prevents Pydantic relationship crashes!)
+    # 7. Clear failed attempts on successful login
+    _login_attempts.pop(request.client.host, None)
+
+    # 8. Return a CLEAN dictionary
     return {
         "access_token": access_token,
         "token_type": "bearer",
@@ -99,9 +122,9 @@ def login(
             "id": user.id,
             "username": user.username,
             "email": user.email,
-            "role": role_name,  # Frontend Sidebar needs this exact string!
+            "role": role_name,
             "is_active": user.is_active,
-            "granted_tasks": granted_task_codes  # NEW: List of task codes like ['registry_upload', 'finance_approve']
+            "granted_tasks": granted_task_codes
         }
     }
 

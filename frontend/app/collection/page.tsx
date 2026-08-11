@@ -254,7 +254,7 @@ export default function CertificateCollection() {
                   {collectionSuccess && (
                     <div className="bg-green-50 border border-green-200 rounded-lg p-3">
                       <p className="text-green-700 text-sm font-medium">
-                        ✅ Certificate collected successfully!
+                         Certificate collected successfully!
                       </p>
                     </div>
                   )}

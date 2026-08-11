@@ -36,7 +36,7 @@ export default function FinanceClearancePage() {
       for (const id of selectedIds) {
         await clearanceApi.updateFinanceClearance(id, { status: action === "approve" ? "cleared" : "not_cleared" });
       }
-      toast.success(`✅ ${selectedIds.length} requests ${action === "approve" ? "approved" : "rejected"}!`, { id: loadingToast });
+      toast.success(` ${selectedIds.length} requests ${action === "approve" ? "approved" : "rejected"}!`, { id: loadingToast });
       fetchData();
     } catch (error: any) {
       toast.error(error.response?.data?.detail || "Failed to process requests.", { id: loadingToast });
@@ -47,7 +47,7 @@ export default function FinanceClearancePage() {
     const loadingToast = toast.loading("Processing...");
     try {
       await clearanceApi.updateFinanceClearance(id, { status });
-      toast.success(status === "cleared" ? "✅ Clearance approved!" : "❌ Clearance rejected.", { id: loadingToast });
+      toast.success(status === "cleared" ? " Clearance approved!" : " Clearance rejected.", { id: loadingToast });
       fetchData();
     } catch (error: any) {
       toast.error(error.response?.data?.detail || "Failed to update.", { id: loadingToast });
@@ -72,7 +72,7 @@ export default function FinanceClearancePage() {
     a.href = url;
     a.download = "finance_clearance_report.csv";
     a.click();
-    toast.success("📥 CSV exported successfully!");
+    toast.success(" CSV exported successfully!");
   };
 
   const columns = [

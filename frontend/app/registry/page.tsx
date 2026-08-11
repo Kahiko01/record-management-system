@@ -74,7 +74,7 @@ export default function RegistryPage() {
       await registryApi.markReady(studentId);
       
       // 3. Replace loading toast with a green success toast!
-      toast.success('✅ Certificate marked as ready for collection!', { id: loadingToast });
+      toast.success(' Certificate marked as ready for collection!', { id: loadingToast });
       
       // 4. Refresh the table data
       fetchData(); 
@@ -83,7 +83,7 @@ export default function RegistryPage() {
       const errorMessage = error.response?.data?.detail || "Failed to mark certificate ready.";
       
       // 6. Show a red error toast
-      toast.error(`❌ Error: ${errorMessage}`, { id: loadingToast });
+      toast.error(` Error: ${errorMessage}`, { id: loadingToast });
     }
   };
 
@@ -99,12 +99,12 @@ export default function RegistryPage() {
     try {
       // Add your upload API call here
       // await registryApi.uploadExcel(formData);
-      toast.success('✅ File uploaded successfully!', { id: loadingToast });
+      toast.success(' File uploaded successfully!', { id: loadingToast });
       fetchData();
     } catch (error: any) {
       console.error('Upload failed:', error);
       const errorMessage = error.response?.data?.detail || 'Failed to upload file. Please check the format.';
-      toast.error(`❌ ${errorMessage}`, { id: loadingToast });
+      toast.error(` ${errorMessage}`, { id: loadingToast });
     }
 
     // Reset the input so the same file can be uploaded again
@@ -116,14 +116,14 @@ export default function RegistryPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "collected":
-        return <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30">✅ Collected</span>;
+        return <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30"> Collected</span>;
       case "ready_for_collection":
       case "ready":
         return <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400 border border-blue-200 dark:border-blue-500/30">📦 Ready</span>;
       case "awaiting_clearance":
         return <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-500/30">⏳ Awaiting Clearance</span>;
       case "in_storage":
-        return <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400 border border-amber-200 dark:border-amber-500/30">🗄️ In Storage</span>;
+        return <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400 border border-amber-200 dark:border-amber-500/30"> In Storage</span>;
       case "on_hold":
         return <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400 border border-red-200 dark:border-red-500/30">🚫 On Hold</span>;
       default:

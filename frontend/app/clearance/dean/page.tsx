@@ -77,8 +77,8 @@ export default function DeanClearancePage() {
       
       toast.success(
         action === "approve" 
-          ? `✅ ${selectedRequest.student.first_name}'s clearance approved!` 
-          : `❌ ${selectedRequest.student.first_name}'s clearance rejected.`,
+          ? ` ${selectedRequest.student.first_name}'s clearance approved!` 
+          : ` ${selectedRequest.student.first_name}'s clearance rejected.`,
         { id: loadingToast }
       );
       

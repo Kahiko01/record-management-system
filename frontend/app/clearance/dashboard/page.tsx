@@ -85,11 +85,11 @@ export default function ClearanceDashboard() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "cleared":
-        return <span className="px-2 py-1 bg-green-500 text-white text-xs rounded-full">✅ Cleared</span>;
+        return <span className="px-2 py-1 bg-green-500 text-white text-xs rounded-full"> Cleared</span>;
       case "pending":
         return <span className="px-2 py-1 bg-yellow-500 text-white text-xs rounded-full">⏳ Pending</span>;
       case "not_cleared":
-        return <span className="px-2 py-1 bg-red-500 text-white text-xs rounded-full">❌ Not Cleared</span>;
+        return <span className="px-2 py-1 bg-red-500 text-white text-xs rounded-full"> Not Cleared</span>;
       default:
         return <span className="px-2 py-1 bg-gray-500 text-white text-xs rounded-full">{status}</span>;
     }
@@ -224,9 +224,9 @@ export default function ClearanceDashboard() {
                       <td className="px-4 py-3">{getStatusBadge(student.overall_status)}</td>
                       <td className="px-4 py-3">
                         {student.has_certificate ? (
-                          <span className="text-green-600">✅ Yes</span>
+                          <span className="text-green-600"> Yes</span>
                         ) : (
-                          <span className="text-gray-400">❌ No</span>
+                          <span className="text-gray-400"> No</span>
                         )}
                       </td>
                     </tr>

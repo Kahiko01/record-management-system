@@ -78,9 +78,9 @@ export default function ExaminationClearancePage() {
 
   const getStatusLabel = (status: string) => {
     switch (status) {
-      case "cleared": return "✅ Cleared";
+      case "cleared": return " Cleared";
       case "pending": return "⏳ Pending";
-      case "not_cleared": return "❌ Not Cleared";
+      case "not_cleared": return " Not Cleared";
       default: return "❓ Unknown";
     }
   };

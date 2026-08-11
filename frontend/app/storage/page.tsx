@@ -188,7 +188,7 @@ export default function StoragePage() {
                           <td className="px-6 py-4 text-sm text-gray-700 dark:text-slate-300">{item.building} - Room {item.room} - Shelf {item.shelf}</td>
                           <td className="px-6 py-4">
                             <span className={`px-2.5 py-1 text-xs font-bold rounded-full border ${item.status === 'collected' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/30' : 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400 border-amber-200 dark:border-amber-500/30'}`}>
-                              {item.status === 'collected' ? '✅ Collected' : '🗄️ In Storage'}
+                              {item.status === 'collected' ? ' Collected' : ' In Storage'}
                             </span>
                           </td>
                         </tr>
