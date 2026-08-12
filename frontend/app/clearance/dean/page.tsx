@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useAuth } from "../../context/AuthContext";
+import { useRouter } from "next/navigation";
+import { useAuth, Permission } from "../../context/AuthContext";
 import { clearanceApi } from "../../lib/api";
 import TopBar from "../../components/TopBar";
 import Sidebar from "../../components/Sidebar";
-import { 
-  GraduationCap, CheckCircle2, Clock, XCircle, AlertCircle, 
+import {
+  GraduationCap, CheckCircle2, Clock, XCircle, AlertCircle,
   Search, Filter, RefreshCw, User, Calendar, BookOpen,
   ChevronRight, ShieldCheck, FileCheck, X
 } from "lucide-react";
@@ -31,6 +32,20 @@ interface ClearanceRequest {
 }
 
 export default function DeanClearancePage() {
+  const { hasPermission, loading: authLoading, isAuthenticated } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!authLoading) {
+      if (!isAuthenticated) {
+        router.replace("/login");
+      } else if (!hasPermission(Permission.DEAN_VIEW_PENDING)) {
+        // KICK OUT: If they don't have Dean permission, send them to dashboard
+        router.replace("/dashboard");
+      }
+    }
+  }, [authLoading, isAuthenticated, hasPermission, router]);
+
   const { user, hasTask } = useAuth();
   const [requests, setRequests] = useState<ClearanceRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,21 +82,21 @@ export default function DeanClearancePage() {
   const handleAction = async (status: string) => {
     if (!selectedRequest) return;
     const loadingToast = toast.loading(action === "approve" ? "Approving clearance..." : "Rejecting clearance...");
-    
+
     try {
       await clearanceApi.updateDeanClearance(selectedRequest.id, {
         status: status,
         remarks: remarks || undefined,
         ...deanCheck,
       });
-      
+
       toast.success(
-        action === "approve" 
-          ? ` ${selectedRequest.student.first_name}'s clearance approved!` 
+        action === "approve"
+          ? ` ${selectedRequest.student.first_name}'s clearance approved!`
           : ` ${selectedRequest.student.first_name}'s clearance rejected.`,
         { id: loadingToast }
       );
-      
+
       setSelectedRequest(null);
       setRemarks("");
       setAction(null);
@@ -122,9 +137,9 @@ export default function DeanClearancePage() {
       <TopBar />
       <div className="flex">
         <Sidebar />
-        
+
         <main className="flex-1 ml-64 min-h-screen p-6 lg:p-8">
-          
+
           {/* Header */}
           <div className="mb-8">
             <div className="flex items-center justify-between mb-2">
@@ -179,24 +194,24 @@ export default function DeanClearancePage() {
                 <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Search Name / ADM No</label>
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <input 
-                    type="text" 
-                    value={filters.search} 
-                    onChange={(e) => setFilters({ ...filters, search: e.target.value })} 
-                    onKeyPress={(e) => e.key === "Enter" && fetchData()} 
-                    placeholder="e.g. John or ADM/2024/001" 
-                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50" 
+                  <input
+                    type="text"
+                    value={filters.search}
+                    onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+                    onKeyPress={(e) => e.key === "Enter" && fetchData()}
+                    placeholder="e.g. John or ADM/2024/001"
+                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
                   />
                 </div>
               </div>
               <div className="w-48">
                 <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Program</label>
-                <input 
-                  type="text" 
-                  value={filters.course} 
-                  onChange={(e) => setFilters({ ...filters, course: e.target.value })} 
-                  placeholder="e.g. Computer Science" 
-                  className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50" 
+                <input
+                  type="text"
+                  value={filters.course}
+                  onChange={(e) => setFilters({ ...filters, course: e.target.value })}
+                  placeholder="e.g. Computer Science"
+                  className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
                 />
               </div>
               <button onClick={fetchData} className="px-5 py-2.5 bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-xl text-sm transition-colors shadow-lg shadow-purple-900/20 flex items-center gap-2">
@@ -221,7 +236,7 @@ export default function DeanClearancePage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
-              
+
               {/* Pending Column */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between px-1">
@@ -298,7 +313,7 @@ export default function DeanClearancePage() {
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
               <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => { setSelectedRequest(null); setAction(null); }} />
               <div className="relative bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl w-full max-w-lg p-6 animate-in fade-in zoom-in-95 duration-200">
-                
+
                 {/* Modal Header */}
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-3">
@@ -340,11 +355,11 @@ export default function DeanClearancePage() {
                       { key: "graduation_eligibility_confirmed", label: "Graduation eligibility confirmed" },
                     ].map((item) => (
                       <label key={item.key} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl hover:border-purple-500/50 cursor-pointer transition-colors">
-                        <input 
-                          type="checkbox" 
-                          checked={(deanCheck as any)[item.key]} 
-                          onChange={(e) => setDeanCheck({ ...deanCheck, [item.key]: e.target.checked })} 
-                          className="w-4 h-4 rounded bg-slate-800 border-slate-700 text-purple-500 focus:ring-purple-500/50" 
+                        <input
+                          type="checkbox"
+                          checked={(deanCheck as any)[item.key]}
+                          onChange={(e) => setDeanCheck({ ...deanCheck, [item.key]: e.target.checked })}
+                          className="w-4 h-4 rounded bg-slate-800 border-slate-700 text-purple-500 focus:ring-purple-500/50"
                         />
                         <span className="text-sm text-slate-700 dark:text-slate-300">{item.label}</span>
                       </label>
@@ -356,30 +371,30 @@ export default function DeanClearancePage() {
                 {action === "reject" && (
                   <div className="mb-5">
                     <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Reason for Rejection</label>
-                    <textarea 
-                      value={remarks} 
-                      onChange={(e) => setRemarks(e.target.value)} 
-                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-500/50" 
-                      rows={3} 
-                      placeholder="Please provide a reason for rejection..." 
+                    <textarea
+                      value={remarks}
+                      onChange={(e) => setRemarks(e.target.value)}
+                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-500/50"
+                      rows={3}
+                      placeholder="Please provide a reason for rejection..."
                     />
                   </div>
                 )}
 
                 {/* Action Buttons */}
                 <div className="flex gap-3">
-                  <button 
-                    onClick={() => { setSelectedRequest(null); setAction(null); }} 
+                  <button
+                    onClick={() => { setSelectedRequest(null); setAction(null); }}
                     className="flex-1 py-3 px-4 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                   >
                     Cancel
                   </button>
-                  <button 
-                    onClick={() => handleAction(action === "approve" ? "cleared" : "not_cleared")} 
-                    disabled={action === "approve" && !allChecked} 
+                  <button
+                    onClick={() => handleAction(action === "approve" ? "cleared" : "not_cleared")}
+                    disabled={action === "approve" && !allChecked}
                     className={`flex-1 py-3 px-4 rounded-xl text-white font-bold text-sm transition-colors ${
-                      action === "approve" 
-                        ? "bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-300 dark:disabled:bg-slate-800 disabled:text-slate-500" 
+                      action === "approve"
+                        ? "bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-300 dark:disabled:bg-slate-800 disabled:text-slate-500"
                         : "bg-rose-600 hover:bg-rose-500"
                     }`}
                   >
@@ -411,7 +426,7 @@ function StudentCard({ request, onApprove, onReject, hasPermission }: { request:
           </div>
         </div>
       </div>
-      
+
       <div className="space-y-1.5 mb-3">
         <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
           <BookOpen className="h-3 w-3" /> {request.student.program}

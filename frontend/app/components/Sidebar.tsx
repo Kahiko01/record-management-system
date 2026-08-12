@@ -16,10 +16,11 @@ export default function Sidebar() {
   const { user, hasTask, logout } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
 
+  // THE BUG IS FIXED HERE
   const hasAnyTask = (tasks: string[]) => {
     if (!user) return false;
     if (user.role === "super_admin" || user.role === "admin") return true;
-    if (tasks.length === 0) return true;
+    if (tasks.length === 0) return false; // Hide it if no tasks are assigned
     return tasks.some(task => hasTask(task));
   };
 
@@ -27,24 +28,24 @@ export default function Sidebar() {
     {
       title: "OVERVIEW",
       items: [
-        { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, tasks: [] },
+        { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, tasks: ["dashboard:view_student", "dashboard:view_finance", "dashboard:view_examination", "dashboard:view_dean", "dashboard:view_registry", "dashboard:view_auditor", "dashboard:view_admin"] },
       ]
     },
     {
       title: "STUDENT SERVICES",
       items: [
-        { name: "Clearance", href: "/clearance/overview", icon: ClipboardCheck, tasks: [] },
-        { name: "Certificates", href: "/registry", icon: Award, tasks: [] },
-        { name: "Student Records", href: "/admin/students", icon: Users, tasks: [] },
+        { name: "Clearance", href: "/clearance/overview", icon: ClipboardCheck, tasks: ["student:apply_clearance", "finance:view_pending", "exam:view_pending", "dean:view_pending"] },
+        { name: "Certificates", href: "/registry", icon: Award, tasks: ["registry:view_inventory", "student:view_collection_status"] },
+        { name: "Student Records", href: "/admin/students", icon: Users, tasks: ["user:view", "user:create", "search:students"] },
       ]
     },
     {
       title: "OPERATIONS",
       items: [
-        { name: "Finance", href: "/clearance/finance", icon: DollarSign, tasks: [] },
-        { name: "Examination", href: "/clearance/examination", icon: BookOpen, tasks: [] },
-        { name: "Registry", href: "/registry/collections", icon: Archive, tasks: [] },
-        { name: "Dean", href: "/clearance/dean", icon: Building2, tasks: [] },
+        { name: "Finance", href: "/clearance/finance", icon: DollarSign, tasks: ["finance:view_pending", "finance:view_dashboard"] },
+        { name: "Examination", href: "/clearance/examination", icon: BookOpen, tasks: ["exam:view_pending", "exam:view_dashboard"] },
+        { name: "Registry", href: "/registry/collections", icon: Archive, tasks: ["registry:view_inventory", "registry:view_dashboard"] },
+        { name: "Dean", href: "/clearance/dean", icon: Building2, tasks: ["dean:view_pending", "dean:view_dashboard"] },
         { name: "Accommodation", href: "#", icon: Home, tasks: [], disabled: true },
         { name: "Discipline", href: "#", icon: Scale, tasks: [], disabled: true },
       ]
@@ -52,15 +53,15 @@ export default function Sidebar() {
     {
       title: "GOVERNANCE",
       items: [
-        { name: "Audit Trail", href: "/admin/audit", icon: ShieldCheck, tasks: [] },
-        { name: "Reports", href: "/admin/audit", icon: BarChart3, tasks: [] }, 
-        { name: "System Activity", href: "/admin/monitoring", icon: Activity, tasks: [] },
+        { name: "Audit Trail", href: "/admin/audit", icon: ShieldCheck, tasks: ["auditor:view_logs", "admin:view_all_logs"] },
+        { name: "Reports", href: "/admin/audit", icon: BarChart3, tasks: ["auditor:view_reports", "admin:view_all_reports", "finance:view_reports", "exam:view_reports", "dean:view_reports", "registry:view_reports"] },
+        { name: "System Activity", href: "/admin/monitoring", icon: Activity, tasks: ["auditor:view_activity", "admin:configure_system", "admin:view_all_logs"] },
       ]
     },
     {
       title: "ADMINISTRATION",
       items: [
-        { name: "Users & Roles", href: "/admin/users", icon: UserCog, tasks: [] },
+        { name: "Users & Roles", href: "/admin/users", icon: UserCog, tasks: ["user:assign_role", "admin:manage_roles", "admin:manage_users", "user:view"] },
         { name: "Departments", href: "#", icon: Layers, tasks: [], disabled: true },
         { name: "System Settings", href: "#", icon: Settings, tasks: [], disabled: true },
       ]
@@ -69,14 +70,14 @@ export default function Sidebar() {
 
   const handleDisabledClick = (name: string) => {
     toast(`${name} module is currently in development.`, {
-      icon: '🛠️', // Keeping one functional emoji for the toast system icon is standard, but text is clean
+      icon: '🛠️',
       style: { background: '#1e293b', color: '#f8fafc', border: '1px solid #334155' }
     });
   };
 
   return (
     <aside className={`fixed left-0 top-16 h-[calc(100vh-4rem)] bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 transition-all duration-300 z-30 flex flex-col ${collapsed ? 'w-16' : 'w-64'}`}>
-      
+
       {/* Sidebar Branding Header */}
       {!collapsed && (
         <div className="px-6 py-4 border-b border-gray-100 dark:border-slate-800">
@@ -97,7 +98,13 @@ export default function Sidebar() {
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-6 custom-scrollbar">
         {menuSections.map((section, idx) => {
-          const visibleItems = section.items.filter(item => hasAnyTask(item.tasks));
+          // Hide disabled items unless the user is an admin
+          const visibleItems = section.items.filter(item => {
+             if (item.disabled && (user?.role === "super_admin" || user?.role === "admin")) return true;
+             if (item.disabled) return false;
+             return hasAnyTask(item.tasks);
+          });
+
           if (visibleItems.length === 0) return null;
 
           return (
@@ -112,7 +119,7 @@ export default function Sidebar() {
                   const Icon = item.icon;
                   const isActive = pathname === item.href;
                   const isDisabled = item.disabled;
-                  
+
                   if (isDisabled) {
                     return (
                       <button
@@ -139,8 +146,8 @@ export default function Sidebar() {
                       title={collapsed ? item.name : undefined}
                     >
                       <Icon className={`h-5 w-5 flex-shrink-0 transition-colors ${
-                        isActive 
-                          ? 'text-emerald-600 dark:text-emerald-400' 
+                        isActive
+                          ? 'text-emerald-600 dark:text-emerald-400'
                           : 'text-gray-400 dark:text-slate-500 group-hover:text-gray-600 dark:group-hover:text-slate-300'
                       }`} />
                       {!collapsed && <span className="truncate">{item.name}</span>}
