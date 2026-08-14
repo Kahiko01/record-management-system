@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import TopBar from "../components/TopBar";
+import WelcomeModal from "../components/WelcomeModal";
 import Sidebar from "../components/Sidebar";
 import { useAuth } from "../context/AuthContext";
 import { clearanceApi } from "../lib/api";
@@ -585,6 +586,10 @@ export default function DashboardPage() {
 
         </main>
       </div>
+
+      {/* ADD THIS LINE HERE */}
+      <WelcomeModal />
+
     </div>
   );
 }

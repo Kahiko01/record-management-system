@@ -6,7 +6,8 @@ import { useAuth } from "../context/AuthContext";
 import {
   LayoutDashboard, ClipboardCheck, Award, Users, DollarSign, BookOpen,
   Archive, Building2, Home, Scale, ShieldCheck, BarChart3, Activity,
-  UserCog, Layers, Settings, ChevronLeft, ChevronRight, LogOut
+  UserCog, Layers, Settings, ChevronLeft, ChevronRight, LogOut,
+  UserCheck, CalendarClock, PackageCheck, Clock, ChevronDown
 } from "lucide-react";
 import { useState } from "react";
 import toast from "react-hot-toast";
@@ -15,12 +16,22 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { user, hasTask, logout } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
+  
+  // Track which parent menus are expanded
+  const [expandedItems, setExpandedItems] = useState<string[]>([]);
 
-  // THE BUG IS FIXED HERE
+  const toggleExpand = (itemName: string) => {
+    setExpandedItems(prev => 
+      prev.includes(itemName) 
+        ? prev.filter(name => name !== itemName)
+        : [...prev, itemName]
+    );
+  };
+
   const hasAnyTask = (tasks: string[]) => {
     if (!user) return false;
     if (user.role === "super_admin" || user.role === "admin") return true;
-    if (tasks.length === 0) return false; // Hide it if no tasks are assigned
+    if (tasks.length === 0) return false;
     return tasks.some(task => hasTask(task));
   };
 
@@ -44,7 +55,22 @@ export default function Sidebar() {
       items: [
         { name: "Finance", href: "/clearance/finance", icon: DollarSign, tasks: ["finance:view_pending", "finance:view_dashboard"] },
         { name: "Examination", href: "/clearance/examination", icon: BookOpen, tasks: ["exam:view_pending", "exam:view_dashboard"] },
-        { name: "Registry", href: "/registry/collections", icon: Archive, tasks: ["registry:view_inventory", "registry:view_dashboard"] },
+        { 
+          name: "Registry", 
+          href: "/dashboard/registry", 
+          icon: Archive, 
+          tasks: ["registry:view_inventory", "registry:view_dashboard"],
+          // 🔽 NESTED REGISTRY TOOLS 🔽
+          children: [
+            { name: "Registry Dashboard", href: "/dashboard/registry", icon: LayoutDashboard, tasks: ["registry:view_dashboard"] },
+            { name: "Verify Student", href: "/dashboard/registry?action=verify", icon: UserCheck, tasks: ["registry:verify_identity"] },
+            { name: "Schedule Collection", href: "/dashboard/registry?action=schedule", icon: CalendarClock, tasks: ["registry:schedule_collection"] },
+            { name: "Release Certificate", href: "/dashboard/registry?action=release", icon: PackageCheck, tasks: ["registry:record_collection"] },
+            { name: "View Pending", href: "/dashboard/registry?filter=pending", icon: Clock, tasks: ["registry:search_cleared"] },
+            { name: "Inventory", href: "/dashboard/registry#inventory", icon: Archive, tasks: ["registry:view_inventory"] },
+            { name: "Reports", href: "/dashboard/registry#reports", icon: BarChart3, tasks: ["registry:view_reports"] },
+          ]
+        },
         { name: "Dean", href: "/clearance/dean", icon: Building2, tasks: ["dean:view_pending", "dean:view_dashboard"] },
         { name: "Accommodation", href: "#", icon: Home, tasks: [], disabled: true },
         { name: "Discipline", href: "#", icon: Scale, tasks: [], disabled: true },
@@ -98,11 +124,10 @@ export default function Sidebar() {
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-6 custom-scrollbar">
         {menuSections.map((section, idx) => {
-          // Hide disabled items unless the user is an admin
           const visibleItems = section.items.filter(item => {
-             if (item.disabled && (user?.role === "super_admin" || user?.role === "admin")) return true;
-             if (item.disabled) return false;
-             return hasAnyTask(item.tasks);
+            if (item.disabled && (user?.role === "super_admin" || user?.role === "admin")) return true;
+            if (item.disabled) return false;
+            return hasAnyTask(item.tasks);
           });
 
           if (visibleItems.length === 0) return null;
@@ -119,7 +144,61 @@ export default function Sidebar() {
                   const Icon = item.icon;
                   const isActive = pathname === item.href;
                   const isDisabled = item.disabled;
+                  const hasChildren = item.children && item.children.length > 0;
+                  const isExpanded = expandedItems.includes(item.name);
+                  
+                  // Filter children by permissions
+                  const visibleChildren = hasChildren ? item.children.filter(child => hasAnyTask(child.tasks)) : [];
 
+                  // Render Parent with Expandable Children
+                  if (hasChildren && visibleChildren.length > 0) {
+                    return (
+                      <div key={item.name}>
+                        <button
+                          onClick={() => toggleExpand(item.name)}
+                          className={`group flex items-center justify-between w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
+                            isActive || isExpanded 
+                              ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 shadow-sm' 
+                              : 'text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800 hover:text-gray-900 dark:hover:text-white'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <Icon className={`h-5 w-5 flex-shrink-0 transition-colors ${isActive || isExpanded ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-400 dark:text-slate-500 group-hover:text-gray-600 dark:group-hover:text-slate-300'}`} />
+                            {!collapsed && <span className="truncate">{item.name}</span>}
+                          </div>
+                          {!collapsed && (
+                            <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                          )}
+                        </button>
+                        
+                        {/* Nested Children Menu */}
+                        {isExpanded && !collapsed && (
+                          <div className="ml-4 mt-1 space-y-1 border-l border-slate-200 dark:border-slate-700 pl-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                            {visibleChildren.map(child => {
+                              const ChildIcon = child.icon;
+                              const isChildActive = pathname === child.href.split('?')[0];
+                              return (
+                                <Link
+                                  key={child.name}
+                                  href={child.href}
+                                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                                    isChildActive 
+                                      ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20' 
+                                      : 'text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-slate-800'
+                                  }`}
+                                >
+                                  <ChildIcon className="h-3.5 w-3.5 flex-shrink-0" />
+                                  <span className="truncate">{child.name}</span>
+                                </Link>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  // Render Disabled Items
                   if (isDisabled) {
                     return (
                       <button
@@ -134,6 +213,7 @@ export default function Sidebar() {
                     );
                   }
 
+                  // Render Standard Link Items
                   return (
                     <Link
                       key={item.name}

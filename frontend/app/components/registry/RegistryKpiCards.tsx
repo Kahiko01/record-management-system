@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { RegistryKpi, RegistryKpiTone } from "../../types/registry";
 
 interface RegistryKpiCardsProps {
@@ -82,9 +83,10 @@ export default function RegistryKpiCards({
         const formattedValue = new Intl.NumberFormat().format(kpi.value);
 
         return (
-          <article
+          <Link 
+            href={kpi.href} 
             key={kpi.id}
-            className={`rounded-2xl border p-5 shadow-sm transition hover:shadow-md ${containerTones[kpi.tone]}`}
+            className={`block rounded-2xl border p-5 shadow-sm transition hover:shadow-lg hover:-translate-y-1 hover:scale-[1.02] cursor-pointer ${containerTones[kpi.tone]}`}
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -110,7 +112,7 @@ export default function RegistryKpiCards({
                 className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${dotTones[kpi.tone]}`}
               />
             </div>
-          </article>
+          </Link>
         );
       })}
     </section>

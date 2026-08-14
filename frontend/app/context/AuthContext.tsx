@@ -269,6 +269,8 @@ interface AuthContextType {
   isRegistry: () => boolean;
   isAuditor: () => boolean;
   hasTask: (taskCode: string) => boolean;
+  showWelcome: boolean;
+  dismissWelcome: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -277,6 +279,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showWelcome, setShowWelcome] = useState(false);
 
   useEffect(() => {
     const storedToken = localStorage.getItem('access_token');
@@ -295,6 +298,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = response.data as LoginResponse;
       setToken(data.access_token);
       setUser(data.user);
+      setShowWelcome(true); // <--- INSTANT TRIGGER
       localStorage.setItem('access_token', data.access_token);
       localStorage.setItem('user', JSON.stringify(data.user));
       localStorage.setItem('user_role', data.user.role);
@@ -346,20 +350,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user) return false;
     // Super Admin bypass
     if (user.role === 'super_admin' || user.role === 'admin') return true;
-    
+
     const grantedTasks = (user as any).granted_tasks || [];
-    
+
     // Check exact match
     if (grantedTasks.includes(taskCode)) return true;
-    
+
     // Check underscore version (exam:approve -> exam_approve)
     const underscoreVersion = taskCode.replace(/:/g, '_');
     if (grantedTasks.includes(underscoreVersion)) return true;
-    
+
     // Check colon version (exam_approve -> exam:approve)
     const colonVersion = taskCode.replace(/_/g, ':');
     if (grantedTasks.includes(colonVersion)) return true;
-    
+
     return false;
   };
 
@@ -377,6 +381,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       hasPermission, hasAnyPermission, hasAllPermissions, getUserMenus,
       isAdmin, isStudent, isFinance, isExamination, isDean, isRegistry, isAuditor,
       hasTask,
+      showWelcome,
+      dismissWelcome: () => setShowWelcome(false),
     }}>
       {children}
     </AuthContext.Provider>

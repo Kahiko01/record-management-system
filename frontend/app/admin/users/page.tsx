@@ -176,11 +176,22 @@ export default function AdminUsersPage() {
     }
   };
 
-  // Group tasks by department
+  // Group tasks by department (with smart deduplication and name fixing)
   const tasksByDepartment = tasks.reduce((acc: any, task: any) => {
-    const dept = task.department || "General";
+    // 1. Fix department names (e.g. "registry" -> "Registry")
+    const rawDept = task.department || "General";
+    const dept = rawDept.charAt(0).toUpperCase() + rawDept.slice(1).toLowerCase();
+    
     if (!acc[dept]) acc[dept] = [];
-    acc[dept].push(task);
+    
+    // 2. Deduplication: Check if we already added a version of this task (colon vs underscore)
+    const baseCode = task.code.replace(/:/g, '_');
+    const alreadyExists = acc[dept].some((t: any) => t.code.replace(/:/g, '_') === baseCode);
+    
+    // 3. Only add it if it's not a duplicate
+    if (!alreadyExists) {
+      acc[dept].push(task);
+    }
     return acc;
   }, {});
 
@@ -436,7 +447,7 @@ export default function AdminUsersPage() {
                 <input type="password" value={newUser.password} onChange={(e) => setNewUser({ ...newUser, password: e.target.value })} className="w-full px-4 py-2.5 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50" placeholder="••••••••" />
               </div>
               <div>
-                <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1.5">Default Role</label>
+                <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1.5">Job Title (Label Only)</label>
                 <select value={newUser.role} onChange={(e) => setNewUser({ ...newUser, role: e.target.value })} className="w-full px-3 py-2.5 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50">
                   <option value="student">Student</option>
                   <option value="finance">Finance Officer</option>
@@ -446,6 +457,9 @@ export default function AdminUsersPage() {
                   <option value="internal_auditor">Internal Auditor</option>
                   <option value="super_admin">Super Admin</option>
                 </select>
+                <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1.5 font-medium">
+                  ⚠️ Zero-Trust: User will be created with NO permissions. Assign tasks after creation.
+                </p>
               </div>
             </div>
 

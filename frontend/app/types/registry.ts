@@ -10,6 +10,7 @@ export interface RegistryKpi {
   value: number;
   hint: string;
   tone: RegistryKpiTone;
+  href: string;
 }
 
 export interface RegistryDashboardSummary {
@@ -44,6 +45,7 @@ export function mapRegistryDashboardSummaryToKpis(
       value: summary.clearedStudents,
       hint: "Students who have completed departmental clearance.",
       tone: "emerald",
+      href: "/dashboard/registry?filter=cleared",
     },
     {
       id: "certificates-ready",
@@ -51,6 +53,7 @@ export function mapRegistryDashboardSummaryToKpis(
       value: summary.certificatesReady,
       hint: "Certificates available for collection.",
       tone: "emerald",
+      href: "/dashboard/registry?filter=ready",
     },
     {
       id: "awaiting-collection",
@@ -58,6 +61,7 @@ export function mapRegistryDashboardSummaryToKpis(
       value: summary.awaitingCollection,
       hint: "Certificates ready but not yet collected.",
       tone: "amber",
+      href: "/dashboard/registry?filter=awaiting",
     },
     {
       id: "collected",
@@ -65,6 +69,7 @@ export function mapRegistryDashboardSummaryToKpis(
       value: summary.collected,
       hint: "Certificates already released.",
       tone: "slate",
+      href: "/dashboard/registry?filter=collected",
     },
     {
       id: "appointments-today",
@@ -72,6 +77,7 @@ export function mapRegistryDashboardSummaryToKpis(
       value: summary.appointmentsToday,
       hint: "Scheduled collection appointments for today.",
       tone: "amber",
+      href: "/dashboard/registry?filter=appointments",
     },
     {
       id: "pending-verification",
@@ -79,6 +85,7 @@ export function mapRegistryDashboardSummaryToKpis(
       value: summary.pendingVerification,
       hint: "Students requiring Registry verification.",
       tone: "amber",
+      href: "/dashboard/registry?filter=verification",
     },
     {
       id: "on-hold",
@@ -86,6 +93,7 @@ export function mapRegistryDashboardSummaryToKpis(
       value: summary.onHold,
       hint: "Records blocked due to an issue.",
       tone: "red",
+      href: "/dashboard/registry?filter=hold",
     },
     {
       id: "uncollected",
@@ -93,6 +101,7 @@ export function mapRegistryDashboardSummaryToKpis(
       value: summary.uncollected,
       hint: "Certificates that have remained uncollected.",
       tone: "amber",
+      href: "/dashboard/registry?filter=uncollected",
     },
   ];
 }
