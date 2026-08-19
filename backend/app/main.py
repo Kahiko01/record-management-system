@@ -1,6 +1,7 @@
-from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 import os
 from dotenv import load_dotenv
@@ -53,6 +54,24 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ==================== PAYLOAD SIZE PROTECTION ====================
+# Blocks oversized uploads (zip bombs / huge JSON floods) at the door.
+MAX_PAYLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
+
+@app.middleware("http")
+async def limit_payload_size(request: Request, call_next):
+    length = request.headers.get("content-length")
+    if length is not None:
+        try:
+            if int(length) > MAX_PAYLOAD_BYTES:
+                return JSONResponse(
+                    status_code=413,
+                    content={"detail": "Payload too large. Maximum size is 10MB."}
+                )
+        except ValueError:
+            pass
+    return await call_next(request)
 
 # Mount static files
 os.makedirs("uploads", exist_ok=True)

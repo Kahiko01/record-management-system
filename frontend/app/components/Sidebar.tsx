@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "../context/AuthContext";
 import {
-  LayoutDashboard, ClipboardCheck, Award, Users, DollarSign, BookOpen,
+  LayoutDashboard, ClipboardCheck, Users, DollarSign, BookOpen,
   Archive, Building2, Home, Scale, ShieldCheck, BarChart3, Activity,
   UserCog, Layers, Settings, ChevronLeft, ChevronRight, LogOut,
   UserCheck, CalendarClock, PackageCheck, Clock, ChevronDown
@@ -16,8 +16,6 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { user, hasTask, logout } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
-  
-  // Track which parent menus are expanded
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
 
   const toggleExpand = (itemName: string) => {
@@ -46,7 +44,6 @@ export default function Sidebar() {
       title: "STUDENT SERVICES",
       items: [
         { name: "Clearance", href: "/clearance/overview", icon: ClipboardCheck, tasks: ["student:apply_clearance", "finance:view_pending", "exam:view_pending", "dean:view_pending"] },
-        { name: "Certificates", href: "/registry", icon: Award, tasks: ["registry:view_inventory", "student:view_collection_status"] },
         { name: "Student Records", href: "/admin/students", icon: Users, tasks: ["user:view", "user:create", "search:students"] },
       ]
     },
@@ -60,15 +57,14 @@ export default function Sidebar() {
           href: "/dashboard/registry", 
           icon: Archive, 
           tasks: ["registry:view_inventory", "registry:view_dashboard"],
-          // 🔽 NESTED REGISTRY TOOLS 🔽
           children: [
             { name: "Registry Dashboard", href: "/dashboard/registry", icon: LayoutDashboard, tasks: ["registry:view_dashboard"] },
             { name: "Verify Student", href: "/dashboard/registry?action=verify", icon: UserCheck, tasks: ["registry:verify_identity"] },
             { name: "Schedule Collection", href: "/dashboard/registry?action=schedule", icon: CalendarClock, tasks: ["registry:schedule_collection"] },
             { name: "Release Certificate", href: "/dashboard/registry?action=release", icon: PackageCheck, tasks: ["registry:record_collection"] },
             { name: "View Pending", href: "/dashboard/registry?filter=pending", icon: Clock, tasks: ["registry:search_cleared"] },
-            { name: "Inventory", href: "/dashboard/registry#inventory", icon: Archive, tasks: ["registry:view_inventory"] },
-            { name: "Reports", href: "/dashboard/registry#reports", icon: BarChart3, tasks: ["registry:view_reports"] },
+            { name: "Inventory", href: "/dashboard/registry/inventory", icon: Archive, tasks: ["registry:view_inventory"] },
+            { name: "Reports", href: "/dashboard/registry/reports", icon: BarChart3, tasks: ["registry:view_reports"] },
           ]
         },
         { name: "Dean", href: "/clearance/dean", icon: Building2, tasks: ["dean:view_pending", "dean:view_dashboard"] },
@@ -80,7 +76,6 @@ export default function Sidebar() {
       title: "GOVERNANCE",
       items: [
         { name: "Audit Trail", href: "/admin/audit", icon: ShieldCheck, tasks: ["auditor:view_logs", "admin:view_all_logs"] },
-        { name: "Reports", href: "/admin/audit", icon: BarChart3, tasks: ["auditor:view_reports", "admin:view_all_reports", "finance:view_reports", "exam:view_reports", "dean:view_reports", "registry:view_reports"] },
         { name: "System Activity", href: "/admin/monitoring", icon: Activity, tasks: ["auditor:view_activity", "admin:configure_system", "admin:view_all_logs"] },
       ]
     },
@@ -147,7 +142,6 @@ export default function Sidebar() {
                   const hasChildren = item.children && item.children.length > 0;
                   const isExpanded = expandedItems.includes(item.name);
                   
-                  // Filter children by permissions
                   const visibleChildren = hasChildren ? item.children.filter(child => hasAnyTask(child.tasks)) : [];
 
                   // Render Parent with Expandable Children
@@ -171,12 +165,12 @@ export default function Sidebar() {
                           )}
                         </button>
                         
-                        {/* Nested Children Menu */}
                         {isExpanded && !collapsed && (
                           <div className="ml-4 mt-1 space-y-1 border-l border-slate-200 dark:border-slate-700 pl-3 animate-in fade-in slide-in-from-top-1 duration-200">
                             {visibleChildren.map(child => {
                               const ChildIcon = child.icon;
-                              const isChildActive = pathname === child.href.split('?')[0];
+                              const childPath = child.href.split('?')[0];
+                              const isChildActive = pathname === childPath;
                               return (
                                 <Link
                                   key={child.name}

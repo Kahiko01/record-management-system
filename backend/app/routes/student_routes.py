@@ -148,6 +148,14 @@ async def bulk_import_students(
     Bulk import students - APPEND MODE.
     Adds new students or updates existing ones. NEVER deletes.
     """
+    # Security: cap the number of rows per import
+    MAX_IMPORT_ROWS = 5000
+    if len(students_data) > MAX_IMPORT_ROWS:
+        raise HTTPException(
+            status_code=413, 
+            detail=f"Too many rows. Maximum {MAX_IMPORT_ROWS} per import."
+        )
+
     created_count = 0
     updated_count = 0
     errors = []
@@ -160,7 +168,7 @@ async def bulk_import_students(
 
             # Check if student already exists
             existing = db.query(Student).filter(Student.student_id == item.student_id).first()
-            
+
             if existing:
                 # UPDATE existing student (append mode - don't delete)
                 existing.first_name = item.first_name
@@ -181,9 +189,9 @@ async def bulk_import_students(
                 )
                 db.add(new_student)
                 created_count += 1
-                
+
             db.commit()
-            
+
         except Exception as e:
             errors.append(f"Row {item.student_id}: {str(e)}")
             db.rollback()

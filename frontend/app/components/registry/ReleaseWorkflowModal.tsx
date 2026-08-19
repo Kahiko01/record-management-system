@@ -10,18 +10,15 @@ import {
 interface ReleaseWorkflowModalProps {
   isOpen: boolean;
   onClose: () => void;
+  studentData: {
+    id: number;
+    studentName: string;
+    admissionNo: string;
+    nationalId: string;
+    programme: string;
+    certificateNumber: string;
+  } | null;
 }
-
-// Mock student data for the release
-const mockReleaseData = {
-  studentName: "John Kamau",
-  admissionNo: "KNP/2022/001",
-  nationalId: "34567890",
-  programme: "ICT",
-  certificateNumber: "CERT/KNP/2024/00421",
-  clearanceStatus: "100% Cleared",
-  recipientType: "Student",
-};
 
 const steps = [
   { id: 1, title: "Identity Verification", icon: Fingerprint, desc: "Verify student ID/Passport" },
@@ -31,7 +28,7 @@ const steps = [
   { id: 5, title: "Final Release", icon: PackageCheck, desc: "Release & record audit event" },
 ];
 
-export default function ReleaseWorkflowModal({ isOpen, onClose }: ReleaseWorkflowModalProps) {
+export default function ReleaseWorkflowModal({ isOpen, onClose, studentData }: ReleaseWorkflowModalProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const [isReleased, setIsReleased] = useState(false);
   const [recipientType, setRecipientType] = useState("student");
@@ -39,7 +36,18 @@ export default function ReleaseWorkflowModal({ isOpen, onClose }: ReleaseWorkflo
   const [repId, setRepId] = useState("");
   const [repAuthRef, setRepAuthRef] = useState("");
 
-  if (!isOpen) return null;
+  if (!isOpen || !studentData) return null;
+
+  // Use the dynamic student data passed from the queue
+  const releaseData = {
+    studentName: studentData.studentName,
+    admissionNo: studentData.admissionNo,
+    nationalId: studentData.nationalId || "N/A",
+    programme: studentData.programme,
+    certificateNumber: studentData.certificateNumber || `CERT-${studentData.admissionNo}`,
+    clearanceStatus: "100% Cleared",
+    recipientType: "Student",
+  };
 
   const nextStep = () => setCurrentStep(prev => Math.min(prev + 1, steps.length));
   const prevStep = () => setCurrentStep(prev => Math.max(prev - 1, 1));
@@ -58,7 +66,7 @@ export default function ReleaseWorkflowModal({ isOpen, onClose }: ReleaseWorkflo
           </div>
           <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Certificate Released!</h2>
           <p className="text-slate-500 dark:text-slate-400 mb-6">
-            {mockReleaseData.certificateNumber} has been successfully handed over to {mockReleaseData.studentName}.
+            {releaseData.certificateNumber} has been successfully handed over to {releaseData.studentName}.
           </p>
           <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 mb-6 text-left">
             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Audit Event Created</p>
@@ -92,7 +100,7 @@ export default function ReleaseWorkflowModal({ isOpen, onClose }: ReleaseWorkflo
               Certificate Release Workflow
             </h2>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-              Controlled release for {mockReleaseData.studentName} ({mockReleaseData.admissionNo})
+              Controlled release for {releaseData.studentName} ({releaseData.admissionNo})
             </p>
           </div>
           <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white transition-colors">
@@ -142,9 +150,9 @@ export default function ReleaseWorkflowModal({ isOpen, onClose }: ReleaseWorkflo
                 Physically verify the student's identification document before proceeding.
               </p>
               <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-6 border border-slate-200 dark:border-slate-700 space-y-4">
-                <DetailRow label="Student Name" value={mockReleaseData.studentName} />
-                <DetailRow label="Admission Number" value={mockReleaseData.admissionNo} mono />
-                <DetailRow label="National ID / Passport" value={mockReleaseData.nationalId} mono />
+                <DetailRow label="Student Name" value={releaseData.studentName} />
+                <DetailRow label="Admission Number" value={releaseData.admissionNo} mono />
+                <DetailRow label="National ID / Passport" value={releaseData.nationalId} mono />
               </div>
               <div className="flex items-center gap-3 p-4 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 rounded-xl">
                 <User className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
@@ -165,7 +173,7 @@ export default function ReleaseWorkflowModal({ isOpen, onClose }: ReleaseWorkflo
                 <div className="flex items-center gap-4">
                   <ShieldCheck className="h-10 w-10 text-emerald-600 dark:text-emerald-400" />
                   <div>
-                    <p className="text-lg font-bold text-emerald-900 dark:text-emerald-300">{mockReleaseData.clearanceStatus}</p>
+                    <p className="text-lg font-bold text-emerald-900 dark:text-emerald-300">{releaseData.clearanceStatus}</p>
                     <p className="text-xs text-emerald-700 dark:text-emerald-400">Finance • Examinations • Dean • Accommodation • Discipline</p>
                   </div>
                 </div>
@@ -187,8 +195,8 @@ export default function ReleaseWorkflowModal({ isOpen, onClose }: ReleaseWorkflo
                 Retrieve the physical certificate and match the serial numbers.
               </p>
               <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-6 border border-slate-200 dark:border-slate-700 space-y-4">
-                <DetailRow label="Certificate Number" value={mockReleaseData.certificateNumber} mono />
-                <DetailRow label="Programme" value={mockReleaseData.programme} />
+                <DetailRow label="Certificate Number" value={releaseData.certificateNumber} mono />
+                <DetailRow label="Programme" value={releaseData.programme} />
                 <DetailRow label="Status" value="Ready for Collection" />
               </div>
               <div className="flex items-center gap-3 p-4 bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/20 rounded-xl">
@@ -250,14 +258,14 @@ export default function ReleaseWorkflowModal({ isOpen, onClose }: ReleaseWorkflo
                       <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5">
                         Representative Full Name <span className="text-red-500">*</span>
                       </label>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         value={repName}
                         onChange={(e) => setRepName(e.target.value)}
                         placeholder="Enter representative's full name"
                         className={`w-full px-3 py-2.5 bg-white dark:bg-slate-800 border rounded-xl text-sm focus:outline-none focus:ring-2 text-slate-900 dark:text-white ${
-                          repName.trim() 
-                            ? "border-emerald-300 dark:border-emerald-500/30 focus:ring-emerald-500/50" 
+                          repName.trim()
+                            ? "border-emerald-300 dark:border-emerald-500/30 focus:ring-emerald-500/50"
                             : "border-red-300 dark:border-red-500/30 focus:ring-red-500/50"
                         }`}
                       />
@@ -266,14 +274,14 @@ export default function ReleaseWorkflowModal({ isOpen, onClose }: ReleaseWorkflo
                       <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5">
                         Representative ID Number <span className="text-red-500">*</span>
                       </label>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         value={repId}
                         onChange={(e) => setRepId(e.target.value)}
                         placeholder="Enter representative's National ID"
                         className={`w-full px-3 py-2.5 bg-white dark:bg-slate-800 border rounded-xl text-sm focus:outline-none focus:ring-2 text-slate-900 dark:text-white ${
-                          repId.trim() 
-                            ? "border-emerald-300 dark:border-emerald-500/30 focus:ring-emerald-500/50" 
+                          repId.trim()
+                            ? "border-emerald-300 dark:border-emerald-500/30 focus:ring-emerald-500/50"
                             : "border-red-300 dark:border-red-500/30 focus:ring-red-500/50"
                         }`}
                       />
@@ -282,14 +290,14 @@ export default function ReleaseWorkflowModal({ isOpen, onClose }: ReleaseWorkflo
                       <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5">
                         Authorization Letter Reference <span className="text-red-500">*</span>
                       </label>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         value={repAuthRef}
                         onChange={(e) => setRepAuthRef(e.target.value)}
                         placeholder="e.g., AUTH/2024/0042"
                         className={`w-full px-3 py-2.5 bg-white dark:bg-slate-800 border rounded-xl text-sm focus:outline-none focus:ring-2 text-slate-900 dark:text-white ${
-                          repAuthRef.trim() 
-                            ? "border-emerald-300 dark:border-emerald-500/30 focus:ring-emerald-500/50" 
+                          repAuthRef.trim()
+                            ? "border-emerald-300 dark:border-emerald-500/30 focus:ring-emerald-500/50"
                             : "border-red-300 dark:border-red-500/30 focus:ring-red-500/50"
                         }`}
                       />
@@ -318,11 +326,11 @@ export default function ReleaseWorkflowModal({ isOpen, onClose }: ReleaseWorkflo
                 Review the summary before permanently releasing the certificate.
               </p>
               <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-6 border border-slate-200 dark:border-slate-700 space-y-4">
-                <DetailRow label="Student" value={mockReleaseData.studentName} />
-                <DetailRow label="Admission No" value={mockReleaseData.admissionNo} mono />
-                <DetailRow label="Certificate" value={mockReleaseData.certificateNumber} mono />
+                <DetailRow label="Student" value={releaseData.studentName} />
+                <DetailRow label="Admission No" value={releaseData.admissionNo} mono />
+                <DetailRow label="Certificate" value={releaseData.certificateNumber} mono />
                 <DetailRow label="Recipient" value={recipientType === "student" ? "Student (Self)" : "Authorized Representative"} />
-                <DetailRow label="Clearance" value={mockReleaseData.clearanceStatus} />
+                <DetailRow label="Clearance" value={releaseData.clearanceStatus} />
               </div>
               <div className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-xl">
                 <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400 flex-shrink-0" />
@@ -345,7 +353,7 @@ export default function ReleaseWorkflowModal({ isOpen, onClose }: ReleaseWorkflo
           </button>
 
           {currentStep < steps.length ? (
-            <button 
+            <button
               onClick={nextStep}
               disabled={currentStep === 4 && recipientType === "representative" && (!repName.trim() || !repId.trim() || !repAuthRef.trim())}
               className="px-6 py-2.5 text-sm font-bold bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-colors shadow-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
