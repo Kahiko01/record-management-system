@@ -1,24 +1,52 @@
-# Python
+# ==========================================
+# ENVIRONMENT & SECRETS
+# ==========================================
+.env
+.env.local
+.env.production
+*.pem
+*.key
+
+# ==========================================
+# PYTHON & VIRTUAL ENVIRONMENTS
+# ==========================================
 __pycache__/
 *.py[cod]
-*.pyo
-
-# Virtual environments
+*$py.class
+*.so
 venv/
+env/
 .venv/
+ENV/
 
-# SQLite databases
+# ==========================================
+# DATABASES
+# ==========================================
 *.db
 *.sqlite
 *.sqlite3
 
-# Node
-node_modules/
-.next/
-
-# Environment variables
-.env
-.env.*
-
-# Logs
+# ==========================================
+# LOGS & TEMP FILES
+# ==========================================
+logs/
 *.log
+.DS_Store
+Thumbs.db
+
+# ==========================================
+# IDE & EDITORS
+# ==========================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ==========================================
+# FRONTEND (Next.js)
+# ==========================================
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.env.local

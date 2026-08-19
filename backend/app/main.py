@@ -4,7 +4,15 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 import os
+import uuid
+import time
+import logging
 from dotenv import load_dotenv
+
+# Prometheus imports
+from prometheus_fastapi_instrumentator import Instrumentator
+from prometheus_fastapi_instrumentator.metrics import Info
+from prometheus_client import Counter
 
 # Use relative imports (with .) for modules within the app
 from .core.database import engine, get_db, Base
@@ -18,14 +26,20 @@ from .routes import (
     monitoring_routes,
     storage_routes,
     student_import_routes,
-    user_routes
+    user_routes,
+    audit_routes
 )
 from .auth.auth import get_current_active_user
 from .models.models import User, UserRole
 from .auth.auth import get_password_hash
-from .core.initialize import initialize_system  # <-- IMPORT FROM .core.initialize
+from .core.initialize import initialize_system
+from .utils.audit import log_audit
+from .core.logging_config import setup_logging, audit_logger
 
 load_dotenv()
+
+# Setup logging
+logger = logging.getLogger(__name__)
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -73,6 +87,87 @@ async def limit_payload_size(request: Request, call_next):
             pass
     return await call_next(request)
 
+# ============================================
+# REQUEST LOGGING MIDDLEWARE (FOR TRACING)
+# ============================================
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    # Generate request ID if not already set
+    if not hasattr(request.state, "request_id"):
+        request.state.request_id = str(uuid.uuid4())
+
+    request_id = request.state.request_id
+    start_time = time.time()
+
+    # Log request start
+    logger.info(f"[{request_id}] {request.method} {request.url.path} started")
+
+    # Process request
+    response = await call_next(request)
+
+    # Calculate duration
+    duration_ms = (time.time() - start_time) * 1000
+
+    # Log request completion
+    logger.info(
+        f"[{request_id}] {request.method} {request.url.path} "
+        f"completed with status {response.status_code} in {duration_ms:.2f}ms"
+    )
+
+    # Add request ID to response headers (useful for debugging)
+    response.headers["X-Request-ID"] = request_id
+
+    return response
+
+# ============================================
+# PROMETHEUS METRICS SETUP
+# ============================================
+
+# Custom business metric: clearance approvals
+CLEARANCE_APPROVALS = Counter(
+    "clearances_approved_total",
+    "Total number of clearances approved",
+    ["department"]
+)
+
+# Custom business metric: login failures
+LOGIN_FAILURES = Counter(
+    "login_failures_total",
+    "Total number of failed login attempts",
+    ["reason"]
+)
+
+# Custom business metric: certificates issued
+CERTIFICATES_ISSUED = Counter(
+    "certificates_issued_total",
+    "Total number of certificates issued",
+    ["programme"]
+)
+
+# Initialize Prometheus instrumentator (adds /metrics endpoint)
+instrumentator = Instrumentator(
+    should_group_status_codes=True,
+    should_ignore_untemplated=True,
+    should_respect_env_var=False,
+    excluded_handlers=["/metrics", "/health"],
+    env_var_name="ENABLE_METRICS",
+)
+# Register metrics with audit utility
+from app.utils.audit import register_metrics
+register_metrics({
+    "login_failures_total": LOGIN_FAILURES,
+    "clearances_approved_total": CLEARANCE_APPROVALS,
+    "certificates_issued_total": CERTIFICATES_ISSUED,
+})
+
+# Instrument the app (tracks request count, latency, in-flight requests)
+instrumentator.instrument(app).expose(
+    app,
+    endpoint="/metrics",
+    include_in_schema=True,
+    should_gzip=True
+)
+
 # Mount static files
 os.makedirs("uploads", exist_ok=True)
 os.makedirs("static", exist_ok=True)
@@ -88,6 +183,7 @@ app.include_router(student_routes.router)
 app.include_router(clearance_routes.router)
 app.include_router(certificate_routes.router)
 app.include_router(user_routes.router)
+app.include_router(audit_routes.router)  # <-- ADDED
 
 # ============================================
 # DIRECT ENDPOINT FOR REGISTRY MARK READY
@@ -95,6 +191,7 @@ app.include_router(user_routes.router)
 @app.put("/clearance/registry/mark-ready/{certificate_id}")
 async def mark_certificate_ready(
     certificate_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
@@ -108,9 +205,20 @@ async def mark_certificate_ready(
     if not certificate:
         raise HTTPException(status_code=404, detail="Certificate not found")
 
-    # Update the status
+    previous_status = certificate.status
     certificate.status = "ready_for_collection"
     db.commit()
+
+    await log_audit(
+        db, current_user.id, "CERTIFICATE_MARKED_READY", "registry",
+        details=f"Certificate {certificate_id} marked ready for collection",
+        previous_status=previous_status,
+        new_status="ready_for_collection",
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        severity="info",
+        request_id=getattr(request.state, "request_id", None)
+    )
 
     return {"message": "Certificate marked as ready"}
 
@@ -144,6 +252,13 @@ async def websocket_endpoint(websocket: WebSocket, role: str):
         manager.disconnect(websocket, role)
 
 @app.post("/seed-admin")
+@app.post("/seed-admin")
+async def seed_admin_user(db: Session = Depends(get_db)):
+    import os
+    if os.getenv("ENVIRONMENT", "development") != "development":
+        raise HTTPException(status_code=403, detail="Seeding is disabled in production.")
+    
+    # ... rest of the existing code
 async def seed_admin(db: Session = Depends(get_db)):
     """Create default admin user if none exists"""
     admin = db.query(User).filter(User.username == "admin").first()
@@ -253,6 +368,10 @@ async def seed_dashboard_data(db: Session = Depends(get_db)):
 # ============================================
 @app.on_event("startup")
 async def startup_event():
+    """Initialize logging and other startup tasks"""
+    env = os.getenv("ENVIRONMENT", "development")
+    setup_logging(env)
+    audit_logger.info("Application started", environment=env)
     initialize_system()
 
 if __name__ == "__main__":

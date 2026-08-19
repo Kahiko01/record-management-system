@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from pydantic import BaseModel
@@ -445,54 +445,94 @@ async def create_certificate_inventory(
     await log_audit(db, current_user.id, "CERTIFICATE_ADDED_TO_INVENTORY", "registry", f"Added certificate {inventory.certificate_number} to inventory")
     return db_inventory
 
-@router.put("/registry/mark-ready/{student_id}", response_model=RegistryInventoryResponse)
+@router.put("/registry/mark-ready/{certificate_id}")
 async def mark_certificate_ready(
-    student_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)
+    certificate_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission(Permission.REGISTRY_MARK_AVAILABLE))
 ):
-    student = db.query(Student).filter(Student.id == student_id).first()
-    if not student: raise HTTPException(status_code=404, detail="Student not found")
+    """Mark a certificate as ready for collection"""
+    from ..models.models import RegistryInventory, CertificateStatus
 
-    clearance = db.query(ClearanceRequest).filter(ClearanceRequest.student_id == student.id).first()
-    if not clearance or clearance.overall_status != "cleared":
-        raise HTTPException(status_code=400, detail="Student is not fully cleared yet")
-
-    certificate = db.query(RegistryInventory).filter(RegistryInventory.student_id == student.id).first()
+    certificate = db.query(RegistryInventory).filter(
+        RegistryInventory.id == certificate_id
+    ).first()
 
     if not certificate:
-        cert_num = f"CERT-{student.student_id}-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
-        certificate = RegistryInventory(
-            certificate_number=cert_num,
-            student_id=student.id,
-            programme=student.program,
-            graduation_year=str(datetime.utcnow().year),
-            storage_location="Main Registry Vault"
-        )
-        db.add(certificate)
-        db.commit()
-        db.refresh(certificate)
-        await log_audit(db, current_user.id, "CERTIFICATE_AUTO_ADDED", "registry", f"Auto-added certificate {cert_num} to inventory")
+        raise HTTPException(status_code=404, detail="Certificate not found")
 
+    # Check if certificate is already ready
+    if certificate.status == CertificateStatus.READY_FOR_COLLECTION:
+        raise HTTPException(status_code=400, detail="Certificate is already marked as ready")
+
+    previous_status = certificate.status.value if hasattr(certificate.status, 'value') else str(certificate.status)
     certificate.status = CertificateStatus.READY_FOR_COLLECTION
     certificate.marked_available_by = current_user.id
     certificate.marked_available_at = datetime.utcnow()
-    db.commit(); db.refresh(certificate)
+    db.commit()
+    db.refresh(certificate)
 
-    notification = Notification(student_id=certificate.student_id, sender_id=current_user.id, notification_type=NotificationType.CLEARANCE_REQUEST, title="Certificate Ready for Collection", message="Your certificate is now ready for collection at the Registry office.")
-    db.add(notification); db.commit()
+    # Get student info for notification
+    student = db.query(Student).filter(Student.id == certificate.student_id).first()
+    if student:
+        notification = Notification(
+            student_id=student.id,
+            sender_id=current_user.id,
+            notification_type=NotificationType.CLEARANCE_REQUEST,
+            title="Certificate Ready for Collection",
+            message="Your certificate is now ready for collection at the Registry office."
+        )
+        db.add(notification)
+        db.commit()
 
-    await log_audit(db, current_user.id, "CERTIFICATE_MARKED_READY", "registry", f"Marked certificate {certificate.certificate_number} as ready for collection")
+    # Audit log with enhanced details
+    await log_audit(
+        db, current_user.id, "CERTIFICATE_MARKED_READY", "registry",
+        details=f"Marked certificate {certificate.certificate_number} as ready for collection",
+        previous_status=previous_status,
+        new_status="ready_for_collection",
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        severity="info"
+    )
 
+    # WebSocket broadcast
     await manager.broadcast_to_role({
         "type": "CERTIFICATE_READY",
-        "message": f"Certificate for {student.first_name} {student.last_name} is ready for collection!"
+        "message": f"Certificate for {student.first_name} {student.last_name} is ready for collection!" if student else "A certificate is ready for collection!"
     }, "admin")
 
-    await manager.broadcast_to_role({
-        "type": "CERTIFICATE_READY",
-        "message": "Your certificate is ready for collection!"
-    }, "student")
+    if student:
+        await manager.broadcast_to_role({
+            "type": "CERTIFICATE_READY",
+            "message": "Your certificate is ready for collection!"
+        }, "student")
 
-    return certificate
+    return {
+        "message": "Certificate marked as ready",
+        "certificate_id": certificate.id,
+        "certificate_number": certificate.certificate_number,
+        "student_id": certificate.student_id,
+        "status": certificate.status.value if hasattr(certificate.status, 'value') else str(certificate.status)
+    }
+
+@router.get("/registry/inventory", response_model=List[RegistryInventoryResponse])
+async def get_registry_inventory(
+    skip: int = 0,
+    limit: int = 100,
+    student_id: Optional[int] = None,
+    status: Optional[CertificateStatus] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission(Permission.REGISTRY_VIEW_INVENTORY))
+):
+    """Get certificate inventory with optional filters"""
+    query = db.query(RegistryInventory)
+    if student_id:
+        query = query.filter(RegistryInventory.student_id == student_id)
+    if status:
+        query = query.filter(RegistryInventory.status == status)
+    return query.offset(skip).limit(limit).all()
 
 # ========================================
 # 6. STUDENT COLLECTS CERTIFICATE
@@ -522,7 +562,7 @@ async def record_collection(
     if not student: raise HTTPException(status_code=404, detail="Student not found")
     db_collection = CertificateCollection(**collection.model_dump(), registry_officer_id=current_user.id, collection_date=datetime.utcnow(), collection_time=datetime.utcnow().strftime("%H:%M"), acknowledgement_received=True)
     db.add(db_collection); db.commit(); db.refresh(db_collection)
-    certificate.status = CertificateStatus.COLLECTED; certificate.collection_id = db_collection.id
+    certificate.status = CertificateStatus.COLLECTED
     db.commit()
     notification = Notification(student_id=student.id, sender_id=current_user.id, notification_type=NotificationType.CLEARANCE_REQUEST, title="Certificate Collected", message="Your certificate has been officially recorded as collected. Congratulations!")
     db.add(notification); db.commit()

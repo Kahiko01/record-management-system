@@ -5,12 +5,13 @@ Enhanced for University Digital Certificate Ecosystem
 import logging
 from enum import Enum
 from typing import List, Optional
-from fastapi import HTTPException, status, Depends
+from fastapi import HTTPException, status, Depends, Request
 from sqlalchemy.orm import Session
 
 from ..models.models import User, UserRole, Student, UserTask, Task
 from ..auth.auth import get_current_active_user
 from ..core.database import get_db
+from ..utils.audit import log_audit
 
 logger = logging.getLogger(__name__)
 
@@ -154,7 +155,7 @@ class Permission(str, Enum):
     ADMIN_ACTIVATE_ACCOUNTS = "admin:activate_accounts"
     ADMIN_RESET_PASSWORDS = "admin:reset_passwords"
     ADMIN_VIEW_AUDIT = "admin:view_audit"
-
+    ADMIN_VIEW_MONITORING = "admin:view_monitoring"
 # ============= 2. ROLE TO PERMISSIONS MAPPING (THE KEYCHAINS) =============
 
 ROLE_PERMISSIONS = {
@@ -239,32 +240,32 @@ def has_permission(user: User, permission: Permission, db: Session = None) -> bo
     """
     if not user: return False
     if not getattr(user, 'is_active', True): return False
-    
+
     # Super Admin bypass (the only exception)
     role_name = get_user_effective_role(user)
     if role_name in ["super_admin", "admin"]:
         return True
-    
+
     # If no database session provided, we can't check tasks
     if not db:
         return False
-    
+
     # Convert Permission enum to task code (e.g., "finance:approve" -> "finance_approve")
     # This allows us to check if the user has the specific task enabled
     task_code = permission.value.replace(":", "_")
-    
+
     # Check if user has this specific task enabled in user_tasks table
     task = db.query(Task).filter(Task.code == task_code).first()
     if not task:
         # Task doesn't exist in database = permission denied
         return False
-    
+
     user_task = db.query(UserTask).filter(
         UserTask.user_id == user.id,
         UserTask.task_id == task.id,
         UserTask.is_enabled == True
     ).first()
-    
+
     return user_task is not None
 
 def has_any_permission(user: User, permissions: List[Permission], db: Session = None) -> bool:
@@ -281,14 +282,14 @@ def get_user_permissions(user: User, db: Session = None) -> List[str]:
         return [p.value for p in Permission]
 
     perms = set()
-    
+
     # Check tasks from database
     if db:
         user_tasks = db.query(UserTask).filter(
             UserTask.user_id == user.id,
             UserTask.is_enabled == True
         ).all()
-        
+
         for ut in user_tasks:
             task = db.query(Task).filter(Task.id == ut.task_id).first()
             if task:
@@ -300,55 +301,125 @@ def get_user_permissions(user: User, db: Session = None) -> List[str]:
 # ============= 4. FASTAPI DEPENDENCIES (THE SECURITY GUARDS) =============
 
 def require_permission(permission: Permission):
-    def permission_checker(
+    async def permission_checker(
+        request: Request,
         current_user: User = Depends(get_current_active_user),
         db: Session = Depends(get_db)
     ):
         if not has_permission(current_user, permission, db):
             logger.warning(f"Task Authorization Failed: User {current_user.username} lacks permission '{permission.value}'")
+            await log_audit(
+                db, current_user.id, "PERMISSION_DENIED", "auth",
+                details=f"User attempted to access a resource requiring '{permission.value}'",
+                subject_username=current_user.username,
+                ip_address=request.client.host if request.client else None,
+                user_agent=request.headers.get("user-agent"),
+                severity="high"
+            )
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, 
+                status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Access Denied. You do not have the '{permission.value}' permission."
             )
         return current_user
     return permission_checker
 
 def require_any_permission(permissions: List[Permission]):
-    def permission_checker(
+    async def permission_checker(
+        request: Request,
         current_user: User = Depends(get_current_active_user),
         db: Session = Depends(get_db)
     ):
         if not has_any_permission(current_user, permissions, db):
             logger.warning(f"Authorization Failed: User {current_user.username} lacked required permissions.")
+            await log_audit(
+                db, current_user.id, "PERMISSION_DENIED", "auth",
+                details=f"User attempted to access a resource requiring specific permissions",
+                subject_username=current_user.username,
+                ip_address=request.client.host if request.client else None,
+                user_agent=request.headers.get("user-agent"),
+                severity="high"
+            )
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access Denied. You do not have the required permissions.")
         return current_user
     return permission_checker
 
 def require_role(roles: List[UserRole]):
-    def role_checker(current_user: User = Depends(get_current_active_user)):
+    async def role_checker(
+        request: Request,
+        current_user: User = Depends(get_current_active_user),
+        db: Session = Depends(get_db)
+    ):
         if current_user.role not in roles:
              logger.warning(f"Authorization Failed: User {current_user.username} attempted to access role-restricted endpoint.")
+             await log_audit(
+                db, current_user.id, "ROLE_DENIED", "auth",
+                details=f"User attempted to access a role-restricted resource",
+                subject_username=current_user.username,
+                ip_address=request.client.host if request.client else None,
+                user_agent=request.headers.get("user-agent"),
+                severity="high"
+             )
              raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access Denied. Invalid role.")
         return current_user
     return role_checker
 
 def require_student_ownership():
-    def ownership_checker(
+    async def ownership_checker(
         student_id: int,
+        request: Request,
         db: Session = Depends(get_db),
         current_user: User = Depends(get_current_active_user)
     ):
         if current_user.role == UserRole.SUPER_ADMIN: return current_user
         if current_user.role != UserRole.STUDENT:
+            await log_audit(
+                db, current_user.id, "PERMISSION_DENIED", "auth",
+                details=f"Non-student attempted to access student record {student_id}",
+                subject_username=current_user.username,
+                ip_address=request.client.host if request.client else None,
+                user_agent=request.headers.get("user-agent"),
+                severity="high"
+            )
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access Denied. Only students can access student records.")
         if db is None:
              raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Database session error.")
         student = db.query(Student).filter(Student.id == student_id, Student.user_id == current_user.id).first()
         if not student:
             logger.warning(f"Ownership Violation: Student User {current_user.id} attempted to access Student Record {student_id}")
+            await log_audit(
+                db, current_user.id, "OWNERSHIP_VIOLATION", "auth",
+                details=f"Student attempted to access another student's record (ID: {student_id})",
+                subject_username=current_user.username,
+                ip_address=request.client.host if request.client else None,
+                user_agent=request.headers.get("user-agent"),
+                severity="critical"
+            )
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access Denied. You can only access your own records.")
         return current_user
     return ownership_checker
+
+def require_task(task_code: str):
+    async def task_checker(
+        request: Request,
+        current_user: User = Depends(get_current_active_user),
+        db: Session = Depends(get_db)
+    ):
+        if not has_task(current_user, task_code, db):
+            logger.warning(f"Task Authorization Failed: User {current_user.username} lacked task '{task_code}'")
+            await log_audit(
+                db, current_user.id, "TASK_DENIED", "auth",
+                details=f"User attempted to access a resource requiring task '{task_code}'",
+                subject_username=current_user.username,
+                ip_address=request.client.host if request.client else None,
+                user_agent=request.headers.get("user-agent"),
+                severity="high"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Access Denied. You do not have the '{task_code}' permission."
+            )
+        return current_user
+    return task_checker
 
 # ==========================================
 # PHASE 4: GRANULAR TASK PERMISSIONS
@@ -378,21 +449,3 @@ def has_task(user: User, task_code: str, db: Session) -> bool:
     ).first()
 
     return user_task is not None
-
-def require_task(task_code: str):
-    """
-    FastAPI Dependency to protect endpoints with granular tasks.
-    Usage: @router.post("/upload", dependencies=[Depends(require_task("registry_upload"))])
-    """
-    def task_checker(
-        current_user: User = Depends(get_current_active_user),
-        db: Session = Depends(get_db)
-    ):
-        if not has_task(current_user, task_code, db):
-            logger.warning(f"Task Authorization Failed: User {current_user.username} lacked task '{task_code}'")
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Access Denied. You do not have the '{task_code}' permission."
-            )
-        return current_user
-    return task_checker

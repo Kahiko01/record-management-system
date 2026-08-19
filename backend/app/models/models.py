@@ -398,15 +398,21 @@ class AuditLog(Base):
     __tablename__ = "audit_logs"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    action = Column(String, nullable=False)
-    module = Column(String, nullable=False)
-    details = Column(Text)
-    previous_status = Column(String)
-    new_status = Column(String)
-    ip_address = Column(String)
-    user_agent = Column(String)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)     # nullable: anonymous events
+    action = Column(String, nullable=False, index=True)
+    module = Column(String, nullable=False, index=True)
+    details = Column(Text)  # Human-readable description
+    metadata_json = Column(JSON, nullable=True)  # NEW: Structured data for queries
+    previous_status = Column(String, nullable=True)
+    new_status = Column(String, nullable=True)
+    ip_address = Column(String, nullable=True)
+    user_agent = Column(Text, nullable=True)
+    subject_username = Column(String, index=True, nullable=True)         # attempted/target username
+    severity = Column(String, nullable=True, default="info")             # info/medium/high/critical
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    request_id = Column(String, nullable=True, index=True)  # NEW: for distributed tracing
+    prev_hash = Column(String, nullable=True)      # NEW: hash of previous audit entry
+    entry_hash = Column(String, nullable=True)     # NEW: hash of this entry
 
     # Relationships
     user = relationship("User", back_populates="audit_logs")

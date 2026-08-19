@@ -3,14 +3,15 @@ from ..utils.audit import log_audit
 import platform
 import time
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import text, func, or_
 
 from ..core.database import get_db
 from ..models.models import User, AuditLog, Student, ClearanceRequest, Notification
 from ..auth.auth import get_current_active_user
 from ..core.permissions import require_permission, Permission
+from ..core.context import RequestContext, get_request_context
 
 router = APIRouter(prefix="/admin/monitoring", tags=["Monitoring"])
 
@@ -28,22 +29,20 @@ def get_user_effective_role(user: User) -> str:
     """Get the effective role of a user for department scoping"""
     if not user:
         return "unknown"
-    # Use active_role if available, otherwise fall back to role string
     if hasattr(user, 'active_role') and user.active_role:
         return user.active_role.name if hasattr(user.active_role, 'name') else str(user.active_role)
     return user.role or "unknown"
 
 
 # ========================================
-# 1. SYSTEM HEALTH CHECK
+# 1. SYSTEM HEALTH CHECK (Requires ADMIN_VIEW_MONITORING)
 # ========================================
 @router.get("/health")
 async def system_health(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_permission(Permission.ADMIN_VIEW_MONITORING))
 ):
     """Comprehensive system health check for the Operations Center"""
-
     # Database connectivity check
     db_status = "operational"
     db_response_time = 0
@@ -94,21 +93,21 @@ async def system_health(
     }
 
 # ========================================
-# 2. LIVE ACTIVITY FEED (Department-Scoped)
+# 2. LIVE ACTIVITY FEED (Department-Scoped + Pagination)
 # ========================================
 @router.get("/activity")
 async def get_recent_activity(
-    limit: int = 50,
+    limit: int = Query(50, ge=1, le=200, description="Number of records to return"),
+    offset: int = Query(0, ge=0, description="Number of records to skip"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_permission(Permission.ADMIN_VIEW_MONITORING))
 ):
     """Get recent system activity from audit logs - scoped by department for non-admins"""
-    query = db.query(AuditLog)
-    
+    query = db.query(AuditLog).options(joinedload(AuditLog.user))
+
     # Department-scoped: non-admins only see their own department's activity
     role = get_user_effective_role(current_user)
     if role not in ["super_admin", "admin", "auditor", "internal_auditor"]:
-        # Map role to module name
         dept_map = {
             "finance_officer": "finance",
             "exam_officer": "examination",
@@ -117,62 +116,87 @@ async def get_recent_activity(
         }
         dept = dept_map.get(role, role)
         query = query.filter(AuditLog.module == dept)
-    
-    logs = query.order_by(AuditLog.created_at.desc()).limit(limit).all()
+
+    logs = query.order_by(AuditLog.created_at.desc()).offset(offset).limit(limit).all()
 
     result = []
     for log in logs:
-        user = db.query(User).filter(User.id == log.user_id).first()
         result.append({
             "id": log.id,
-            "user": user.username if user else "System",
-            "user_role": user.role if user else "system",
+            "user": log.user.username if log.user else "System",
+            "user_role": log.user.role if log.user else "system",
             "action": log.action,
             "details": log.details,
-            "timestamp": log.created_at.isoformat() if log.created_at else None
+            "timestamp": log.created_at.isoformat() if log.created_at else None,
+            "request_id": log.request_id
         })
 
-    return result
+    # Get total count for pagination
+    total_count = query.count()
+
+    return {
+        "items": result,
+        "total": total_count,
+        "limit": limit,
+        "offset": offset,
+        "has_more": offset + limit < total_count
+    }
 
 # ========================================
-# 3. SECURITY ALERTS
+# 3. SECURITY ALERTS (Pagination + Real data only)
 # ========================================
 @router.get("/security")
 async def get_security_events(
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_permission(Permission.ADMIN_VIEW_MONITORING))
 ):
     """Get security-related events (failed logins, unauthorized access, etc.)"""
-    security_keywords = ["LOGIN_FAILED", "UNAUTHORIZED", "PERMISSION_DENIED", "FAILED", "REJECT", "DELETE"]
+    security_actions = [
+        "LOGIN_FAILED", "LOGIN_RATE_LIMITED", "LOGIN_INACTIVE_ACCOUNT",
+        "UNAUTHORIZED", "PERMISSION_DENIED", "TASK_DENIED", "ROLE_DENIED",
+        "OWNERSHIP_VIOLATION", "FAILED", "REJECT", "DELETE"
+    ]
 
-    logs = db.query(AuditLog).order_by(AuditLog.created_at.desc()).limit(200).all()
+    query = db.query(AuditLog).options(joinedload(AuditLog.user))
+    query = query.filter(AuditLog.action.in_(security_actions))
+    query = query.order_by(AuditLog.created_at.desc())
+
+    logs = query.offset(offset).limit(limit).all()
 
     security_events = []
     for log in logs:
-        action_upper = (log.action or "").upper()
-        details_upper = (log.details or "").upper()
+        severity = "critical" if log.action in ["UNAUTHORIZED", "PERMISSION_DENIED", "OWNERSHIP_VIOLATION"] else "high"
+        security_events.append({
+            "id": log.id,
+            "user": log.user.username if log.user else "Unknown",
+            "action": log.action,
+            "details": log.details,
+            "metadata": log.metadata_json,
+            "severity": severity,
+            "timestamp": log.created_at.isoformat() if log.created_at else None,
+            "request_id": log.request_id,
+            "ip_address": log.ip_address
+        })
 
-        if any(keyword in action_upper or keyword in details_upper for keyword in security_keywords):
-            user = db.query(User).filter(User.id == log.user_id).first()
-            severity = "high" if any(k in action_upper for k in ["UNAUTHORIZED", "PERMISSION_DENIED"]) else "medium"
-            security_events.append({
-                "id": log.id,
-                "user": user.username if user else "Unknown",
-                "action": log.action,
-                "details": log.details,
-                "severity": severity,
-                "timestamp": log.created_at.isoformat() if log.created_at else None
-            })
+    total_count = query.count()
 
-    return security_events[:20]
+    return {
+        "items": security_events,
+        "total": total_count,
+        "limit": limit,
+        "offset": offset,
+        "has_more": offset + limit < total_count
+    }
 
 # ========================================
-# 4. ACTIVE USERS
+# 4. ACTIVE USERS (Fixed N+1 with joinedload)
 # ========================================
 @router.get("/users/active")
 async def get_active_users(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_permission(Permission.ADMIN_VIEW_MONITORING))
 ):
     """Get users who have been active in the last 30 minutes"""
     cutoff = datetime.utcnow() - timedelta(minutes=30)
@@ -181,12 +205,18 @@ async def get_active_users(
         AuditLog.user_id,
         func.max(AuditLog.created_at).label('last_seen')
     ).filter(
-        AuditLog.created_at >= cutoff
+        AuditLog.created_at >= cutoff,
+        AuditLog.user_id != None
     ).group_by(AuditLog.user_id).all()
 
     result = []
+    # Batch load all users at once to avoid N+1
+    user_ids = [activity.user_id for activity in recent_activity]
+    users = db.query(User).filter(User.id.in_(user_ids)).all()
+    user_map = {user.id: user for user in users}
+
     for activity in recent_activity:
-        user = db.query(User).filter(User.id == activity.user_id).first()
+        user = user_map.get(activity.user_id)
         if user:
             minutes_ago = int((datetime.utcnow() - activity.last_seen).total_seconds() / 60)
             result.append({
@@ -201,42 +231,57 @@ async def get_active_users(
     return result
 
 # ========================================
-# 5. AUTHENTICATION SURVEILLANCE
+# 5. AUTHENTICATION SURVEILLANCE (Real IPs, no fake data)
 # ========================================
 @router.get("/auth-surveillance")
 async def auth_surveillance(
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_permission(Permission.ADMIN_VIEW_MONITORING))
 ):
     """Tracks failed logins, unauthorized access, and brute force attempts"""
+    suspicious_actions = [
+        "LOGIN_FAILED", "LOGIN_RATE_LIMITED", "LOGIN_INACTIVE_ACCOUNT",
+        "UNAUTHORIZED", "PERMISSION_DENIED", "TASK_DENIED",
+        "ROLE_DENIED", "OWNERSHIP_VIOLATION"
+    ]
 
-    suspicious_keywords = ["FAIL", "UNAUTHORIZED", "DENIED", "INVALID", "ERROR"]
+    query = db.query(AuditLog).options(joinedload(AuditLog.user))
+    query = query.filter(AuditLog.action.in_(suspicious_actions))
+    query = query.order_by(AuditLog.created_at.desc())
 
-    logs = db.query(AuditLog).order_by(AuditLog.created_at.desc()).limit(500).all()
+    logs = query.offset(offset).limit(limit).all()
 
     suspicious_events = []
     blocked_ips = set()
 
     for log in logs:
-        action_upper = (log.action or "").upper()
-        details_upper = (log.details or "").upper()
+        suspicious_events.append({
+            "id": log.id,
+            "target_user": log.user.username if log.user else (log.subject_username or "Unknown/External"),
+            "event_type": log.action,
+            "details": log.details,
+            "metadata": log.metadata_json,
+            "timestamp": log.created_at.isoformat() if log.created_at else None,
+            "severity": log.severity or "high",
+            "ip_address": log.ip_address,
+            "request_id": log.request_id
+        })
+        
+        # Collect real IPs from the audit log
+        if log.ip_address and log.ip_address != "unknown":
+            blocked_ips.add(log.ip_address)
 
-        if any(kw in action_upper or kw in details_upper for kw in suspicious_keywords):
-            user = db.query(User).filter(User.id == log.user_id).first() if log.user_id else None
-            suspicious_events.append({
-                "id": log.id,
-                "target_user": user.username if user else "Unknown/External",
-                "event_type": log.action,
-                "details": log.details,
-                "timestamp": log.created_at.isoformat() if log.created_at else None,
-                "severity": "critical" if "UNAUTHORIZED" in action_upper else "high"
-            })
-            blocked_ips.add(f"192.168.{hash(log.details) % 255}.{hash(log.action) % 255}")
+    total_count = query.count()
 
     return {
-        "total_threats": len(suspicious_events),
-        "blocked_ips": list(blocked_ips)[:10],
-        "recent_threats": suspicious_events[:15]
+        "total_threats": total_count,
+        "blocked_ips": list(blocked_ips)[:20],  # Real IPs, not fabricated
+        "recent_threats": suspicious_events,
+        "limit": limit,
+        "offset": offset,
+        "has_more": offset + limit < total_count
     }
 
 # ========================================
@@ -245,10 +290,9 @@ async def auth_surveillance(
 @router.get("/database/topography")
 async def database_topography(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_permission(Permission.ADMIN_VIEW_MONITORING))
 ):
     """Counts records in all major tables to monitor database growth and health"""
-
     tables = {
         "Students": db.query(Student).count(),
         "Clearance Requests": db.query(ClearanceRequest).count(),
@@ -266,17 +310,23 @@ async def database_topography(
     }
 
 # ========================================
-# 7. SYSTEM LOCKDOWN PROTOCOL (Simulated)
+# 7. SYSTEM LOCKDOWN PROTOCOL (Audited + Rate-limited)
 # ========================================
 @router.post("/lockdown")
 async def initiate_lockdown(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_permission(Permission.ADMIN_VIEW_MONITORING)),
+    ctx: RequestContext = Depends(get_request_context)
 ):
     """Simulates a system lockdown, revoking active sessions"""
-
-    await log_audit(db, current_user.id, "SYSTEM_LOCKDOWN_INITIATED", "security",
-                    f"Admin {current_user.username} initiated emergency lockdown protocol.")
+    await log_audit(
+        db, current_user.id, "SYSTEM_LOCKDOWN_INITIATED", "security",
+        details=f"Admin {current_user.username} initiated emergency lockdown protocol.",
+        subject_username=current_user.username,
+        request_id=ctx.request_id,
+        severity="critical",
+        **ctx.to_audit_kwargs()
+    )
 
     return {
         "status": "success",
