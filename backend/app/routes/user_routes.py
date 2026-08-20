@@ -113,7 +113,7 @@ async def create_user(
         "dean": UserRole.DEAN,
         "registry_officer": UserRole.REGISTRY_OFFICER,
         "internal_auditor": UserRole.INTERNAL_AUDITOR,
-        "student": UserRole.STUDENT
+        # "student": UserRole.STUDENT,  # 🚫 Students don't have system access
     }
 
     # Clean up the string (e.g. "Registry Officer" -> "registry_officer")

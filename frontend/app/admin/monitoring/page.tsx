@@ -1,47 +1,61 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import TopBar from "../../components/TopBar";
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "../../context/AuthContext";
+import { clearanceApi } from "../../lib/api";
+import {
+  Shield, AlertTriangle, Activity, Users, Database, Clock,
+  TrendingUp, Eye, Lock, Unlock, Server, Cpu, HardDrive,
+  Wifi, CheckCircle2, XCircle, RefreshCw
+} from "lucide-react";
 import Sidebar from "../../components/Sidebar";
-import { monitoringApi } from "../../lib/api";
-import { Shield, Activity, AlertTriangle, Users, Database, Cpu, HardDrive, MemoryStick, RefreshCw, CheckCircle, XCircle, Lock, Zap, Wifi, Server } from "lucide-react";
+import TopBar from "../../components/TopBar";
+import { useWebSocket, WebSocketMessage } from "../../hooks/useWebSocket";
 
-export default function SystemMonitorPage() {
-  const [health, setHealth] = useState<any>(null);
-  const [activity, setActivity] = useState<any[]>([]);
-  const [security, setSecurity] = useState<any[]>([]);
+export default function MonitoringPage() {
+  const router = useRouter();
+  const { user, loading: authLoading, isAuthenticated, hasPermission } = useAuth();
+
+  const [securityEvents, setSecurityEvents] = useState<any[]>([]);
   const [activeUsers, setActiveUsers] = useState<any[]>([]);
+  const [systemHealth, setSystemHealth] = useState<any>(null);
   const [authSurveillance, setAuthSurveillance] = useState<any>(null);
-  const [dbTopography, setDbTopography] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [currentTime, setCurrentTime] = useState("");
-  const [lastRefresh, setLastRefresh] = useState("");
-  const [lockdownMode, setLockdownMode] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [liveEvents, setLiveEvents] = useState<any[]>([]);
 
   useEffect(() => {
-    const updateTime = () => setCurrentTime(new Date().toLocaleTimeString());
-    updateTime();
-    const interval = setInterval(updateTime, 1000);
-    return () => clearInterval(interval);
-  }, []);
+    if (!authLoading && (!isAuthenticated || !hasPermission("admin:view_monitoring"))) {
+      router.replace("/unauthorized");
+    }
+  }, [authLoading, isAuthenticated, hasPermission, router]);
 
-  const fetchAllData = async () => {
+  useEffect(() => {
+    if (isAuthenticated && hasPermission("admin:view_monitoring")) {
+      fetchMonitoringData();
+      // Auto-refresh every 30 seconds
+      const interval = setInterval(fetchMonitoringData, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [isAuthenticated, hasPermission]);
+
+  const fetchMonitoringData = async () => {
     try {
-      const [healthRes, activityRes, securityRes, usersRes, authRes, dbRes] = await Promise.all([
-        monitoringApi.getHealth(),
-        monitoringApi.getActivity(50),
-        monitoringApi.getSecurity(),
-        monitoringApi.getActiveUsers(),
-        monitoringApi.getAuthSurveillance(),
-        monitoringApi.getDatabaseTopography(),
+      setLoading(true);
+
+      const [securityRes, activeRes, healthRes, surveillanceRes] = await Promise.all([
+        clearanceApi.getSecurityEvents(),
+        clearanceApi.getActiveUsers(),
+        clearanceApi.getSystemHealth(),
+        clearanceApi.getAuthSurveillance()
       ]);
-      setHealth(healthRes.data);
-      setActivity(activityRes.data || []);
-      setSecurity(securityRes.data || []);
-      setActiveUsers(usersRes.data || []);
-      setAuthSurveillance(authRes.data);
-      setDbTopography(dbRes.data);
-      setLastRefresh(new Date().toLocaleTimeString());
+
+      setSecurityEvents(securityRes.data.items || []);
+      setActiveUsers(activeRes.data || []);
+      setSystemHealth(healthRes.data);
+      setAuthSurveillance(surveillanceRes.data);
+      setLastUpdated(new Date());
     } catch (error) {
       console.error("Failed to fetch monitoring data:", error);
     } finally {
@@ -49,225 +63,324 @@ export default function SystemMonitorPage() {
     }
   };
 
-  useEffect(() => {
-    fetchAllData();
-    const interval = setInterval(fetchAllData, 5000);
-    return () => clearInterval(interval);
+  const handleWebSocketMessage = useCallback((message: WebSocketMessage) => {
+    if (message.type === "SECURITY_EVENT") {
+      // Add to top of security events with animation flag
+      setSecurityEvents(prev => [{
+        ...message.data,
+        user: message.data.subject_username || "Unknown",
+        _isNew: true
+      }, ...prev].slice(0, 50)); // Keep max 50 events
+    }
   }, []);
 
-  const handleLockdown = async () => {
-    if (!confirm("⚠ WARNING: Initiate System Lockdown Protocol? This will flag all active sessions for termination.")) return;
-    try {
-      await monitoringApi.initiateLockdown();
-      setLockdownMode(true);
-      setTimeout(() => setLockdownMode(false), 5000); // Flash red for 5 seconds
-      fetchAllData();
-    } catch (error) {
-      alert("Failed to initiate lockdown.");
+  const { isConnected } = useWebSocket({
+    onMessage: handleWebSocketMessage,
+    autoReconnect: true,
+    reconnectInterval: 5000
+  });
+
+  if (authLoading || !isAuthenticated) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-slate-50 dark:bg-slate-950">
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-emerald-500 border-t-transparent"></div>
+      </div>
+    );
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "critical": return "text-red-600 dark:text-red-400";
+      case "high": return "text-orange-600 dark:text-orange-400";
+      case "warning": return "text-amber-600 dark:text-amber-400";
+      case "operational": return "text-emerald-600 dark:text-emerald-400";
+      default: return "text-slate-600 dark:text-slate-400";
     }
   };
 
-  const formatUptime = (seconds: number) => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    return `${hours}h ${minutes}m`;
+  const getStatusBg = (status: string) => {
+    switch (status) {
+      case "critical": return "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800";
+      case "high": return "bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-800";
+      case "warning": return "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800";
+      case "operational": return "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800";
+      default: return "bg-slate-50 dark:bg-slate-950/20 border-slate-200 dark:border-slate-800";
+    }
   };
 
-  const getStatusColor = (status: string) => status === "operational" ? "text-emerald-400" : status === "warning" ? "text-amber-400" : "text-rose-400";
-  const getProgressBarColor = (percent: number) => percent >= 90 ? "bg-rose-500" : percent >= 70 ? "bg-amber-500" : "bg-emerald-500";
-
-  if (loading) return <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-slate-950"><div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 dark:border-slate-800 border-t-emerald-500"></div></div>;
-
   return (
-    <div className={`min-h-screen transition-colors duration-500 ${lockdownMode ? 'bg-rose-950' : 'bg-gray-50 dark:bg-slate-950'} text-gray-900 dark:text-slate-200`}>
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 transition-colors">
       <TopBar />
       <div className="flex">
         <Sidebar />
-        <div className="flex-1 max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <main className="flex-1 ml-64 p-6 lg:p-8 min-h-screen">
+          <div className="max-w-7xl mx-auto space-y-6">
 
-          {/* === HEADER === */}
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 border-b border-gray-200 dark:border-slate-800 pb-4 gap-4">
-            <div className="flex items-center gap-3">
-              <Shield className={`h-8 w-8 ${lockdownMode ? 'text-rose-500 animate-pulse' : 'text-emerald-600 dark:text-emerald-400'}`} />
+            {/* Header */}
+            <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-wider font-mono">SYSTEM SURVEILLANCE & MONITOR</h1>
-                <p className="text-[10px] text-gray-500 dark:text-slate-500 font-mono tracking-widest">UNIVERSITY CLEARANCE // COMMAND CENTER</p>
+                <h1 className="text-3xl font-bold text-slate-900 dark:text-white flex items-center gap-3">
+                  <Shield className="h-8 w-8 text-emerald-600" />
+                  Operations Center
+                </h1>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                  Real-time system monitoring and security surveillance
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${isConnected ? "bg-emerald-500 animate-pulse" : "bg-red-500"}`}></div>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                    {isConnected ? "LIVE" : "DISCONNECTED"}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Last updated: {lastUpdated.toLocaleTimeString()}
+                </p>
+                <button
+                  onClick={fetchMonitoringData}
+                  disabled={loading}
+                  className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-950/30 hover:bg-emerald-200 dark:hover:bg-emerald-950/50 transition-colors"
+                >
+                  <RefreshCw className={`h-4 w-4 text-emerald-600 dark:text-emerald-400 ${loading ? "animate-spin" : ""}`} />
+                </button>
               </div>
             </div>
-            <div className="flex items-center gap-4 flex-wrap">
-              <div className="flex items-center gap-2">
-                <span className="relative flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-                </span>
-                <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 tracking-widest font-mono">LIVE FEED</span>
-              </div>
-              <div className="text-right font-mono">
-                <p className="text-sm text-gray-900 dark:text-white">{currentTime}</p>
-                <p className="text-[10px] text-gray-500 dark:text-slate-500">Sync: {lastRefresh}</p>
-              </div>
-              <button onClick={fetchAllData} className="p-2 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 rounded-xl transition-colors border border-gray-200 dark:border-slate-700"><RefreshCw className="h-4 w-4 text-gray-600 dark:text-slate-400" /></button>
-              <button onClick={handleLockdown} className="flex items-center gap-2 px-3 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl transition-colors border border-rose-500 shadow-lg shadow-rose-900/50">
-                <Lock className="h-3.5 w-3.5" /> INITIATE LOCKDOWN
-              </button>
-            </div>
-          </div>
 
-          {lockdownMode && (
-            <div className="mb-4 p-3 bg-rose-500/20 border border-rose-500 rounded-xl text-center">
-              <p className="text-rose-300 font-bold font-mono animate-pulse">⚠ LOCKDOWN PROTOCOL ACTIVE // ALL SESSIONS FLAGGED FOR TERMINATION ⚠</p>
-            </div>
-          )}
+            {/* System Health Overview */}
+            {systemHealth && (
+              <div className={`rounded-2xl border-2 p-6 ${getStatusBg(systemHealth.overall_status)}`}>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <Server className="h-5 w-5" />
+                    System Health
+                  </h2>
+                  <span className={`px-4 py-1.5 rounded-full text-sm font-bold uppercase ${getStatusColor(systemHealth.overall_status)} bg-white dark:bg-slate-900`}>
+                    {systemHealth.overall_status}
+                  </span>
+                </div>
 
-          {/* === SYSTEM HEALTH CARDS === */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-            <div className="rounded-2xl border border-gray-200 dark:border-slate-800 p-4 bg-white dark:bg-slate-900 shadow-sm">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider font-mono">System Status</span>
-                <Server className="h-4 w-4 text-gray-400 dark:text-slate-500" />
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <HealthMetric
+                    icon={Database}
+                    label="Database"
+                    value={systemHealth.database.status}
+                    subValue={`${systemHealth.database.response_time_ms}ms`}
+                    status={systemHealth.database.status === "operational" ? "operational" : "critical"}
+                  />
+                  <HealthMetric
+                    icon={Cpu}
+                    label="CPU Usage"
+                    value={`${systemHealth.system.cpu_percent}%`}
+                    status={systemHealth.system.cpu_percent > 80 ? "warning" : "operational"}
+                  />
+                  <HealthMetric
+                    icon={Activity}
+                    label="Memory"
+                    value={`${systemHealth.system.memory_percent}%`}
+                    status={systemHealth.system.memory_percent > 85 ? "warning" : "operational"}
+                  />
+                  <HealthMetric
+                    icon={HardDrive}
+                    label="Disk"
+                    value={`${systemHealth.system.disk_percent}%`}
+                    status={systemHealth.system.disk_percent > 85 ? "warning" : "operational"}
+                  />
+                </div>
               </div>
-              <p className={`text-lg font-bold uppercase font-mono ${getStatusColor(health?.overall_status)}`}>{health?.overall_status}</p>
-              <p className="text-[10px] text-gray-500 dark:text-slate-500 mt-1 font-mono">Uptime: {formatUptime(health?.uptime_seconds || 0)}</p>
-            </div>
-            <div className="rounded-2xl border border-gray-200 dark:border-slate-800 p-4 bg-white dark:bg-slate-900 shadow-sm">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider font-mono">Database</span>
-                <Database className="h-4 w-4 text-gray-400 dark:text-slate-500" />
-              </div>
-              <div className="flex items-center gap-2">
-                {health?.database?.status === "operational" ? <CheckCircle className="h-5 w-5 text-emerald-600 dark:text-emerald-400" /> : <XCircle className="h-5 w-5 text-rose-400" />}
-                <p className={`text-lg font-bold font-mono ${health?.database?.status === "operational" ? "text-emerald-600 dark:text-emerald-400" : "text-rose-400"}`}>{health?.database?.response_time_ms}ms</p>
-              </div>
-              <p className="text-[10px] text-gray-500 dark:text-slate-500 mt-1 font-mono">Latency: Nominal</p>
-            </div>
-            <div className="rounded-2xl border border-gray-200 dark:border-slate-800 p-4 bg-white dark:bg-slate-900 shadow-sm">
-              <div className="flex items-center justify-between mb-2"><span className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider font-mono">Memory</span><MemoryStick className="h-4 w-4 text-gray-400 dark:text-slate-500" /></div>
-              <p className="text-lg font-bold text-gray-900 dark:text-white font-mono">{health?.system?.memory_percent}%</p>
-              <div className="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-1.5 mt-2"><div className={`h-1.5 rounded-full ${getProgressBarColor(health?.system?.memory_percent)}`} style={{ width: `${health?.system?.memory_percent}%` }}></div></div>
-            </div>
-            <div className="rounded-2xl border border-gray-200 dark:border-slate-800 p-4 bg-white dark:bg-slate-900 shadow-sm">
-              <div className="flex items-center justify-between mb-2"><span className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider font-mono">Disk I/O</span><HardDrive className="h-4 w-4 text-gray-400 dark:text-slate-500" /></div>
-              <p className="text-lg font-bold text-gray-900 dark:text-white font-mono">{health?.system?.disk_percent}%</p>
-              <div className="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-1.5 mt-2"><div className={`h-1.5 rounded-full ${getProgressBarColor(health?.system?.disk_percent)}`} style={{ width: `${health?.system?.disk_percent}%` }}></div></div>
-            </div>
-            <div className="rounded-2xl border border-gray-200 dark:border-slate-800 p-4 bg-white dark:bg-slate-900 shadow-sm">
-              <div className="flex items-center justify-between mb-2"><span className="text-[10px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider font-mono">CPU Load</span><Cpu className="h-4 w-4 text-gray-400 dark:text-slate-500" /></div>
-              <p className="text-lg font-bold text-gray-900 dark:text-white font-mono">{health?.system?.cpu_percent}%</p>
-              <div className="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-1.5 mt-2"><div className={`h-1.5 rounded-full ${getProgressBarColor(health?.system?.cpu_percent)}`} style={{ width: `${health?.system?.cpu_percent}%` }}></div></div>
-            </div>
-          </div>
+            )}
 
-          {/* === SURVEILLANCE GRID === */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-            {/* AUTH SURVEILLANCE (Brute Force Tracker) */}
-            <div className="lg:col-span-1 rounded-2xl border border-gray-200 dark:border-slate-800 overflow-hidden flex flex-col bg-white dark:bg-slate-900 shadow-sm">
-              <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-200 dark:border-slate-800 bg-rose-50 dark:bg-rose-500/5">
-                <Zap className="h-4 w-4 text-rose-600 dark:text-rose-400" />
-                <h2 className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-widest font-mono">Auth Surveillance</h2>
-                <span className="ml-auto text-[10px] text-rose-600 dark:text-rose-400 font-mono">{authSurveillance?.total_threats || 0} Threats</span>
+              {/* Security Events Feed */}
+              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5 text-red-600" />
+                    Security Events
+                  </h2>
+                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-red-100 dark:bg-red-950/30 text-red-700 dark:text-red-400">
+                    {securityEvents.length} events
+                  </span>
+                </div>
+
+                <div className="space-y-3 max-h-96 overflow-y-auto">
+                  {securityEvents.length === 0 ? (
+                    <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-8">
+                      No security events recorded
+                    </p>
+                  ) : (
+                    securityEvents.slice(0, 10).map((event) => (
+                      <div
+                        key={event.id}
+                        className={`p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 transition-all duration-500 ${
+                          event._isNew ? "animate-in slide-in-from-left-4 bg-emerald-50 dark:bg-emerald-950/20" : ""
+                        }`}
+                        onAnimationEnd={() => {
+                          // Remove the _isNew flag after animation
+                          if (event._isNew) {
+                            setSecurityEvents(prev => prev.map(e => 
+                              e.id === event.id ? { ...e, _isNew: false } : e
+                            ));
+                          }
+                        }}
+                      >
+                        <div className="flex items-start justify-between mb-2">
+                          <span className={`px-2 py-0.5 rounded text-xs font-bold ${
+                            event.severity === "critical" ? "bg-red-100 dark:bg-red-950/30 text-red-700 dark:text-red-400" :
+                            event.severity === "high" ? "bg-orange-100 dark:bg-orange-950/30 text-orange-700 dark:text-orange-400" :
+                            "bg-amber-100 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400"
+                          }`}>
+                            {event.severity.toUpperCase()}
+                          </span>
+                          <span className="text-xs text-slate-500 dark:text-slate-400">
+                            {new Date(event.timestamp).toLocaleTimeString()}
+                          </span>
+                        </div>
+                        <p className="text-sm font-semibold text-slate-900 dark:text-white mb-1">
+                          {event.action}
+                        </p>
+                        <p className="text-xs text-slate-600 dark:text-slate-400 mb-2">
+                          {event.details}
+                        </p>
+                        <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                          <Users className="h-3 w-3" />
+                          <span>{event.user}</span>
+                          {event.ip_address && (
+                            <>
+                              <span>•</span>
+                              <Wifi className="h-3 w-3" />
+                              <span>{event.ip_address}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
-              <div className="p-4 space-y-3 flex-1 overflow-y-auto max-h-80">
-                <div className="p-3 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl">
-                  <p className="text-[10px] text-gray-500 dark:text-slate-500 font-mono uppercase mb-2">Blocked IPs (Simulated)</p>
-                  <div className="flex flex-wrap gap-2">
-                    {authSurveillance?.blocked_ips?.slice(0, 4).map((ip: string, i: number) => (
-                      <span key={i} className="px-2 py-0.5 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 rounded text-[10px] font-mono text-rose-600 dark:text-rose-400">{ip}</span>
-                    ))}
+
+              {/* Active Users */}
+              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <Users className="h-5 w-5 text-blue-600" />
+                    Active Users
+                  </h2>
+                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-blue-100 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400">
+                    {activeUsers.length} online
+                  </span>
+                </div>
+
+                <div className="space-y-3 max-h-96 overflow-y-auto">
+                  {activeUsers.length === 0 ? (
+                    <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-8">
+                      No active users
+                    </p>
+                  ) : (
+                    activeUsers.map((user) => (
+                      <div
+                        key={user.user_id}
+                        className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800"
+                      >
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                            {user.username}
+                          </p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">
+                            {user.role}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                            {user.minutes_ago === 0 ? "Just now" : `${user.minutes_ago}m ago`}
+                          </p>
+                          <div className="flex items-center gap-1 mt-1">
+                            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                            <span className="text-xs text-slate-500 dark:text-slate-400">Active</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Authentication Surveillance */}
+            {authSurveillance && (
+              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6">
+                <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-4">
+                  <Eye className="h-5 w-5 text-purple-600" />
+                  Authentication Surveillance
+                </h2>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                  <div className="p-4 rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800">
+                    <p className="text-2xl font-bold text-red-700 dark:text-red-400">
+                      {authSurveillance.total_threats}
+                    </p>
+                    <p className="text-sm text-red-600 dark:text-red-300">Total Threats</p>
+                  </div>
+                  <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
+                    <p className="text-2xl font-bold text-amber-700 dark:text-amber-400">
+                      {authSurveillance.blocked_ips?.length || 0}
+                    </p>
+                    <p className="text-sm text-amber-600 dark:text-amber-300">Blocked IPs</p>
+                  </div>
+                  <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800">
+                    <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">
+                      {authSurveillance.recent_threats?.length || 0}
+                    </p>
+                    <p className="text-sm text-blue-600 dark:text-blue-300">Recent Events</p>
                   </div>
                 </div>
-                <div className="space-y-2">
-                  {authSurveillance?.recent_threats?.slice(0, 5).map((threat: any) => (
-                    <div key={threat.id} className="p-2 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl text-[10px] font-mono">
-                      <p className="text-rose-600 dark:text-rose-400 font-bold">{threat.event_type}</p>
-                      <p className="text-gray-700 dark:text-slate-400 truncate">{threat.details}</p>
-                      <p className="text-gray-500 dark:text-slate-600 mt-1">Target: {threat.target_user}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
 
-            {/* DATABASE TOPOGRAPHY */}
-            <div className="lg:col-span-1 rounded-2xl border border-gray-200 dark:border-slate-800 overflow-hidden flex flex-col bg-white dark:bg-slate-900 shadow-sm">
-              <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-200 dark:border-slate-800 bg-blue-50 dark:bg-blue-500/5">
-                <Database className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                <h2 className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-widest font-mono">DB Topography</h2>
-                <span className="ml-auto text-[10px] text-blue-600 dark:text-blue-400 font-mono">{dbTopography?.total_records || 0} Records</span>
-              </div>
-              <div className="p-4 space-y-3 flex-1 overflow-y-auto max-h-80">
-                {dbTopography?.tables && Object.entries(dbTopography.tables).map(([table, count]: any) => (
-                  <div key={table} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl">
-                    <span className="text-xs text-gray-700 dark:text-slate-300 font-mono">{table}</span>
-                    <div className="flex items-center gap-2">
-                      <div className="w-24 bg-gray-200 dark:bg-slate-700 rounded-full h-1.5">
-                        <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: `${Math.min((count / (dbTopography.total_records || 1)) * 100, 100)}%` }}></div>
-                      </div>
-                      <span className="text-xs font-bold text-gray-900 dark:text-white font-mono w-12 text-right">{count.toLocaleString()}</span>
+                {authSurveillance.blocked_ips && authSurveillance.blocked_ips.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">
+                      Blocked IP Addresses
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                      {authSurveillance.blocked_ips.map((ip: string, idx: number) => (
+                        <span
+                          key={idx}
+                          className="px-3 py-1 rounded-lg text-xs font-mono bg-red-100 dark:bg-red-950/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800"
+                        >
+                          <Lock className="h-3 w-3 inline mr-1" />
+                          {ip}
+                        </span>
+                      ))}
                     </div>
                   </div>
-                ))}
-                <div className="mt-4 p-3 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 rounded-xl text-center">
-                  <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono uppercase">Integrity Status</p>
-                  <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300 font-mono mt-1">NOMINAL</p>
-                </div>
-              </div>
-            </div>
-
-            {/* ACTIVE SESSIONS */}
-            <div className="lg:col-span-1 rounded-2xl border border-gray-200 dark:border-slate-800 overflow-hidden flex flex-col bg-white dark:bg-slate-900 shadow-sm">
-              <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-200 dark:border-slate-800 bg-emerald-50 dark:bg-emerald-500/5">
-                <Wifi className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                <h2 className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-widest font-mono">Active Sessions</h2>
-                <span className="ml-auto text-[10px] text-emerald-600 dark:text-emerald-400 font-mono">{activeUsers.length} Online</span>
-              </div>
-              <div className="p-4 space-y-2 flex-1 overflow-y-auto max-h-80">
-                {activeUsers.length === 0 ? (
-                  <p className="text-xs text-gray-500 dark:text-slate-500 text-center mt-8 font-mono">No active nodes detected</p>
-                ) : (
-                  activeUsers.map((user) => (
-                    <div key={user.user_id} className="flex items-center gap-3 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl p-3">
-                      <div className="relative">
-                        <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-slate-800 flex items-center justify-center text-gray-700 dark:text-white font-bold text-[10px] font-mono">{user.username?.charAt(0).toUpperCase()}</div>
-                        <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400 border-2 border-white dark:border-slate-950"></span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-bold text-gray-900 dark:text-white font-mono truncate">{user.username}</p>
-                        <p className="text-[10px] text-gray-500 dark:text-slate-500 font-mono uppercase">{user.role}</p>
-                      </div>
-                      <span className="text-[10px] text-gray-500 dark:text-slate-600 font-mono">{user.minutes_ago}m ago</span>
-                    </div>
-                  ))
                 )}
               </div>
-            </div>
-          </div>
+            )}
 
-          {/* === LIVE ACTIVITY TERMINAL === */}
-          <div className="rounded-2xl border border-gray-200 dark:border-slate-800 overflow-hidden bg-white dark:bg-slate-900 shadow-sm">
-            <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-800/50">
-              <Activity className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-              <h2 className="text-xs font-bold text-gray-900 dark:text-white uppercase tracking-widest font-mono">Live System Telemetry</h2>
-            </div>
-            <div className="max-h-64 overflow-y-auto bg-gray-50 dark:bg-slate-950 p-4 font-mono text-[11px] text-gray-700 dark:text-slate-300">
-              {activity.length === 0 ? (
-                <p className="text-gray-500 dark:text-slate-600 text-center">Awaiting telemetry...</p>
-              ) : (
-                activity.map((log) => (
-                  <div key={log.id} className="flex flex-wrap gap-1 md:gap-3 mb-1 hover:bg-gray-100 dark:hover:bg-slate-900 px-2 py-0.5 rounded">
-                    <span className="text-gray-500 dark:text-slate-600 shrink-0">[{new Date(log.timestamp).toLocaleTimeString()}]</span>
-                    <span className="text-emerald-600 dark:text-emerald-400 shrink-0">[{log.user_role?.toUpperCase()}]</span>
-                    <span className="text-blue-600 dark:text-blue-400 shrink-0">{log.user}</span>
-                    <span className="text-amber-600 dark:text-amber-400 shrink-0">-&gt; {log.action}</span>
-                    <span className="text-gray-600 dark:text-slate-400 truncate">{log.details}</span>
-                  </div>
-                ))
-              )}
-            </div>
           </div>
-
-        </div>
+        </main>
       </div>
+    </div>
+  );
+}
+
+function HealthMetric({ icon: Icon, label, value, subValue, status }: any) {
+  const colorMap = {
+    operational: "text-emerald-600 dark:text-emerald-400",
+    warning: "text-amber-600 dark:text-amber-400",
+    critical: "text-red-600 dark:text-red-400"
+  };
+
+  return (
+    <div className="p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+      <div className="flex items-center gap-2 mb-2">
+        <Icon className={`h-4 w-4 ${colorMap[status]}`} />
+        <span className="text-xs font-medium text-slate-600 dark:text-slate-400">{label}</span>
+      </div>
+      <p className={`text-xl font-bold ${colorMap[status]}`}>{value}</p>
+      {subValue && (
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{subValue}</p>
+      )}
     </div>
   );
 }

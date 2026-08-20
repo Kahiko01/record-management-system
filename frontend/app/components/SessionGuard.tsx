@@ -8,10 +8,11 @@ const INACTIVITY_LIMIT = 15 * 60 * 1000; // 15 minutes
 const WARNING_WINDOW = 30; // 30 second countdown
 
 export default function SessionGuard() {
-  const { user, logout } = useAuth();
+  const { user, logout, isAuthenticated } = useAuth();
   const [warning, setWarning] = useState(false);
   const [countdown, setCountdown] = useState(WARNING_WINDOW);
   const lastActivity = useRef(Date.now());
+  const logoutCalled = useRef(false); // Prevent multiple logout calls
 
   // Track user activity
   useEffect(() => {
@@ -34,13 +35,20 @@ export default function SessionGuard() {
     return () => clearInterval(check);
   }, [user, warning]);
 
-  // Countdown during warning
+  // Countdown during warning - FIXED with setTimeout
   useEffect(() => {
     if (!warning) return;
     const t = setInterval(() => {
       setCountdown((c) => {
         if (c <= 1) {
-          logout();
+          // ⏰ Use setTimeout to avoid calling setState during render
+          if (!logoutCalled.current) {
+            logoutCalled.current = true;
+            setTimeout(() => {
+              logout();
+              logoutCalled.current = false;
+            }, 0);
+          }
           return 0;
         }
         return c - 1;
@@ -48,6 +56,17 @@ export default function SessionGuard() {
     }, 1000);
     return () => clearInterval(t);
   }, [warning, logout]);
+
+  // 🔒 Authentication check with setTimeout
+  useEffect(() => {
+    // Only run if user exists but is not authenticated (edge case)
+    if (user && !isAuthenticated) {
+      // ⏰ Use setTimeout to avoid calling setState during render
+      setTimeout(() => {
+        logout();
+      }, 0);
+    }
+  }, [user, isAuthenticated, logout]);
 
   if (!user || !warning) return null;
 
@@ -65,10 +84,25 @@ export default function SessionGuard() {
           {countdown}s
         </div>
         <div className="flex gap-3">
-          <button onClick={logout} className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center justify-center gap-2">
+          <button 
+            onClick={() => {
+              // ⏰ Use setTimeout to avoid calling setState during render
+              setTimeout(() => {
+                logout();
+              }, 0);
+            }} 
+            className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center justify-center gap-2"
+          >
             <LogOut className="h-4 w-4" /> Log Out
           </button>
-          <button onClick={() => { lastActivity.current = Date.now(); setWarning(false); }} className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm transition-colors flex items-center justify-center gap-2">
+          <button 
+            onClick={() => { 
+              lastActivity.current = Date.now(); 
+              setWarning(false); 
+              logoutCalled.current = false;
+            }} 
+            className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm transition-colors flex items-center justify-center gap-2"
+          >
             <RefreshCw className="h-4 w-4" /> Stay Signed In
           </button>
         </div>

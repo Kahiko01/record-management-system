@@ -40,15 +40,16 @@ async def bulk_import_students(
             # Create User Account (username = ADM No, default password = student123)
             username = item.student_id.strip().lower().replace(" ", "")
             existing_user = db.query(User).filter(User.username == username).first()
-            
+
             if not existing_user:
                 new_user = User(
                     username=username,
                     email=item.email,
                     full_name=f"{item.first_name} {item.last_name}",
                     hashed_password=get_password_hash("student123"),
-                    role=UserRole.STUDENT,
-                    is_active=True
+                    # role=UserRole.STUDENT,  # 🚫 Students don't have system access
+                    role=None,  # Students are records, not system users
+                    is_active=False  # Disabled by default - no system access
                 )
                 db.add(new_user)
                 db.commit()

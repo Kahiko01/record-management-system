@@ -51,12 +51,13 @@ export const studentApi = {
 };
 
 export const clearanceApi = {
+  // Clearance endpoints
   requestClearance: (studentId: number) => api.post('/clearance/request', { student_id: studentId }),
   getMyStatus: () => api.get('/clearance/my-status'),
   getTrend: () => api.get('/clearance/stats/trend'),
-   getPrograms: () => api.get('/clearance/stats/programs'),
-   getBottlenecks: () => api.get('/clearance/stats/bottlenecks'),  
-   getFinancePending: (params?: any) => api.get('/clearance/finance/pending', { params }),
+  getPrograms: () => api.get('/clearance/stats/programs'),
+  getBottlenecks: () => api.get('/clearance/stats/bottlenecks'),
+  getFinancePending: (params?: any) => api.get('/clearance/finance/pending', { params }),
   uploadPayments: (data: any[]) => api.post('/clearance/finance/bulk-payments', data),
   updateFinanceClearance: (clearanceId: number, data: any) => api.put(`/clearance/finance/${clearanceId}`, data),
   getExaminationPending: (params?: any) => api.get('/clearance/examination/pending', { params }),
@@ -66,14 +67,44 @@ export const clearanceApi = {
   getClearedStudents: () => api.get('/clearance/registry/cleared-students'),
   getStats: () => api.get('/clearance/stats/dashboard'),
   getOverview: (params?: any) => api.get('/clearance/overview', { params }),
+
+  // Monitoring endpoints
+  getSecurityEvents: (params?: { limit?: number; offset?: number }) =>
+    api.get('/admin/monitoring/security', { params }),
+
+  getRecentActivity: (params?: { limit?: number; offset?: number }) =>
+    api.get('/admin/monitoring/activity', { params }),
+
+  getActiveUsers: () =>
+    api.get('/admin/monitoring/users/active'),
+
+  getSystemHealth: () =>
+    api.get('/admin/monitoring/health'),
+
+  getAuthSurveillance: (params?: { limit?: number; offset?: number }) =>
+    api.get('/admin/monitoring/auth-surveillance', { params }),
+
+  getDatabaseTopography: () =>
+    api.get('/admin/monitoring/database/topography'),
+
+  initiateLockdown: () =>
+    api.post('/admin/monitoring/lockdown'),
 };
 
 export const registryApi = {
   addCertificate: (data: any) => api.post('/clearance/registry/inventory', data),
   updateCertificate: (id: number, data: any) => api.put(`/clearance/registry/inventory/${id}`, data),
+  getRegistryStats: () => api.get('/storage/registry/stats'),
+  transitionCertificate: (id: number, data: any) => api.put(`/storage/certificates/${id}/transition`, data),
   getCollectionsReport: () => api.get('/clearance/registry/collections-report'),
   getCertificates: (params?: any) => api.get('/clearance/registry/inventory', { params }),
   markReady: (studentId: number) => api.put(`/clearance/registry/mark-ready/${studentId}`),
+  uploadCertificatePreview: (formData: FormData) => api.post('/storage/bulk-import-certificates/preview', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
+  importCertificates: (formData: FormData) => api.post('/storage/bulk-import-certificates', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
 };
 
 export const notificationApi = {
@@ -105,7 +136,13 @@ export const collectionApi = {
 };
 
 export const auditApi = {
-  getLogs: () => api.get('/clearance/audit/logs'),
+  getLogs: (params?: any) => api.get('/audit/logs', { params }),
+};
+
+export const reportApi = {
+  getAnalytics: (params?: any) => api.get('/reports/analytics', { params }),
+  exportCSV: (params?: any) => api.get('/reports/export/csv', { params, responseType: 'blob' }),
+  exportPDF: (params?: any) => api.get('/reports/export/pdf', { params, responseType: 'blob' })
 };
 
 export const userApi = {

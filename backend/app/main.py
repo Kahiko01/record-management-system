@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 import os
+from .routes import ip_routes
 import uuid
 import time
 import logging
@@ -27,7 +28,8 @@ from .routes import (
     storage_routes,
     student_import_routes,
     user_routes,
-    audit_routes
+    audit_routes,
+    report_routes
 )
 from .auth.auth import get_current_active_user
 from .models.models import User, UserRole
@@ -35,6 +37,7 @@ from .auth.auth import get_password_hash
 from .core.initialize import initialize_system
 from .utils.audit import log_audit
 from .core.logging_config import setup_logging, audit_logger
+#from .core.ip_middleware import IPAccessMiddleware  # <-- ADDED IMPORT
 
 load_dotenv()
 
@@ -50,6 +53,13 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# ==================== IP ACCESS CONTROL MIDDLEWARE ====================
+# MUST be added BEFORE CORS to ensure IP checks happen first
+# Middleware runs in reverse order, so adding it first means it runs last
+# We'll add it last to ensure it runs first on requests
+# app.add_middleware(IPAccessMiddleware)  # <-- Moved to after CORS
+
+# ==================== CORS SETUP ====================
 # CORS setup - supports both localhost and LAN access
 cors_origins = [
     "http://localhost:3000",
@@ -68,6 +78,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ==================== IP ACCESS CONTROL MIDDLEWARE ====================
+# ADDED LAST - This ensures it runs FIRST on incoming requests
+# (FastAPI middleware runs in reverse order of addition)
+#app.add_middleware(IPAccessMiddleware)
 
 # ==================== PAYLOAD SIZE PROTECTION ====================
 # Blocks oversized uploads (zip bombs / huge JSON floods) at the door.
@@ -183,7 +198,9 @@ app.include_router(student_routes.router)
 app.include_router(clearance_routes.router)
 app.include_router(certificate_routes.router)
 app.include_router(user_routes.router)
-app.include_router(audit_routes.router)  # <-- ADDED
+app.include_router(audit_routes.router)
+app.include_router(ip_routes.router)
+app.include_router(report_routes.router)  # <-- ADDED
 
 # ============================================
 # DIRECT ENDPOINT FOR REGISTRY MARK READY
@@ -239,28 +256,113 @@ async def health_check():
     return {"status": "healthy"}
 
 # ============================================
-# WEBSOCKET ENDPOINT FOR REAL-TIME UPDATES
+# SECURE WEBSOCKET ENDPOINT
 # ============================================
-@app.websocket("/ws/{role}")
-async def websocket_endpoint(websocket: WebSocket, role: str):
-    await manager.connect(websocket, role)
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket, token: str = None):
+    """Secure WebSocket endpoint with JWT authentication"""
+    from app.core.websocket_manager import manager, verify_websocket_token
+    from app.models.models import User
+    from app.core.database import SessionLocal
+
+    print(f"🔌 New WebSocket connection attempt")
+
+    if not token:
+        print("❌ No token provided")
+        await websocket.close(code=1008, reason="Authentication required")
+        return
+
+    payload = verify_websocket_token(token)
+    if not payload:
+        print("❌ Invalid token")
+        await websocket.close(code=1008, reason="Invalid token")
+        return
+
+    username = payload.get("sub")
+    if not username:
+        print("❌ No username in token")
+        await websocket.close(code=1008, reason="Invalid token payload")
+        return
+
+    print(f"✅ Token valid for user: {username}")
+
+    # Get user from database with proper session management
+    db = None
+    user = None
     try:
+        db = SessionLocal()
+        user = db.query(User).filter(User.username == username).first()
+
+        if not user:
+            print(f"❌ User not found: {username}")
+            await websocket.close(code=1008, reason="User not found")
+            return
+
+        if not user.is_active:
+            print(f"❌ User inactive: {username}")
+            await websocket.close(code=1008, reason="User account is inactive")
+            return
+
+        print(f"✅ User found: {user.username} (ID: {user.id})")
+
+        role = "student"
+        if hasattr(user, 'active_role') and user.active_role:
+            role = user.active_role.name
+        elif user.role:
+            role = str(user.role)
+
+        print(f"✅ User role: {role}")
+
+        # Store user info before closing DB session
+        user_id = user.id
+        user_username = user.username
+        user_role = role
+
+    except Exception as e:
+        print(f"❌ Database error: {e}")
+        await websocket.close(code=1011, reason="Database error")
+        return
+    finally:
+        # Close database session IMMEDIATELY after getting user info
+        if db:
+            db.close()
+            print("✅ Database session closed")
+
+    # Now handle WebSocket connection (no DB session needed)
+    try:
+        await manager.connect(websocket, user_id, user_role, user_username)
+        print(f"✅ User connected to WebSocket manager")
+
+        await websocket.send_json({
+            "type": "CONNECTION_ESTABLISHED",
+            "data": {
+                "user_id": user_id,
+                "username": user_username,
+                "role": user_role,
+                "message": "Connected to real-time updates"
+            }
+        })
+        print(f"✅ Welcome message sent")
+
+        print(f"🔄 Waiting for messages from client...")
         while True:
-            # Keep the connection alive by waiting for messages
             data = await websocket.receive_text()
+            print(f"📨 Received message: {data}")
+
     except WebSocketDisconnect:
-        manager.disconnect(websocket, role)
+        print(f"👋 Client disconnected: {user_username}")
+        manager.disconnect(user_id)
+    except Exception as e:
+        print(f"❌ WebSocket error: {e}")
+        manager.disconnect(user_id)
 
 @app.post("/seed-admin")
-@app.post("/seed-admin")
 async def seed_admin_user(db: Session = Depends(get_db)):
+    """Create default admin user if none exists (development only)"""
     import os
     if os.getenv("ENVIRONMENT", "development") != "development":
         raise HTTPException(status_code=403, detail="Seeding is disabled in production.")
-    
-    # ... rest of the existing code
-async def seed_admin(db: Session = Depends(get_db)):
-    """Create default admin user if none exists"""
+
     admin = db.query(User).filter(User.username == "admin").first()
     if not admin:
         admin_user = User(

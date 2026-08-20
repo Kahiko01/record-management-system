@@ -1,233 +1,188 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import TopBar from "../components/TopBar";
-import WelcomeModal from "../components/WelcomeModal";
-import Sidebar from "../components/Sidebar";
-import { useAuth } from "../context/AuthContext";
-import { clearanceApi } from "../lib/api";
-import PremiumKPICard from "../components/PremiumKPICard";
+import { useRouter } from "next/navigation";
+import { useAuth, Permission } from "../context/AuthContext";
 import Link from "next/link";
 import {
-  Users, CheckCircle2, Clock, XCircle, Award, FileText,
-  GraduationCap, TrendingUp, DollarSign, BookOpen, Layers,
-  Calendar, ShieldCheck, Activity, Sparkles, RefreshCw,
-  ChevronRight, BarChart3, ArrowUpRight, Building2,
-  AlertTriangle, Download, Wifi, WifiOff
+  PackageCheck, Users, Award, Clock, AlertTriangle,
+  CheckCircle2, XCircle, Calendar, FileText,
+  RefreshCw, Download, Search, Filter, Plus,
+  ArrowUpRight, Building2, Layers, UserCheck,
+  ShieldCheck, Activity, TrendingUp, BarChart3,
+  Settings, HelpCircle, ChevronRight, Eye
 } from "lucide-react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, Legend } from "recharts";
 import toast from "react-hot-toast";
+import TopBar from "../components/TopBar";
+import Sidebar from "../components/Sidebar";
 
-// ==================== TYPES ====================
-interface TrendData {
-  day: string;
-  date: string;
-  cleared: number;
-  pending: number;
+// ============================================
+// TYPES
+// ============================================
+interface DashboardStats {
+  totalCertificates: number;
+  readyForCollection: number;
+  awaitingCollection: number;
+  collected: number;
+  onHold: number;
+  pendingVerification: number;
+  appointmentsToday: number;
+  clearedStudents: number;
 }
 
-interface ActivityItem {
+interface RecentActivity {
   id: number;
   user: string;
   action: string;
-  module: string;
   details: string;
   timestamp: string;
 }
 
-// ==================== SKELETON LOADER ====================
-function SkeletonCard() {
-  return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800 animate-pulse">
-      <div className="flex items-center justify-between mb-3">
-        <div className="h-3 w-20 bg-slate-200 dark:bg-slate-800 rounded" />
-        <div className="h-10 w-10 bg-slate-200 dark:bg-slate-800 rounded-xl" />
+interface CertificateItem {
+  id: number;
+  certificateNumber: string;
+  studentName: string;
+  studentId: string;
+  programme: string;
+  status: string;
+  location: string;
+  createdAt: string;
+}
+
+// ============================================
+// STAT CARD COMPONENT
+// ============================================
+function StatCard({
+  title,
+  value,
+  subtitle,
+  icon: Icon,
+  color,
+  href
+}: {
+  title: string;
+  value: number | string;
+  subtitle: string;
+  icon: any;
+  color: 'blue' | 'emerald' | 'amber' | 'rose' | 'purple' | 'slate';
+  href?: string;
+}) {
+  const colorMap = {
+    blue: { bg: "bg-blue-50 dark:bg-blue-500/10", text: "text-blue-600 dark:text-blue-400", border: "border-blue-200 dark:border-blue-500/20" },
+    emerald: { bg: "bg-emerald-50 dark:bg-emerald-500/10", text: "text-emerald-600 dark:text-emerald-400", border: "border-emerald-200 dark:border-emerald-500/20" },
+    amber: { bg: "bg-amber-50 dark:bg-amber-500/10", text: "text-amber-600 dark:text-amber-400", border: "border-amber-200 dark:border-amber-500/20" },
+    rose: { bg: "bg-rose-50 dark:bg-rose-500/10", text: "text-rose-600 dark:text-rose-400", border: "border-rose-200 dark:border-rose-500/20" },
+    purple: { bg: "bg-purple-50 dark:bg-purple-500/10", text: "text-purple-600 dark:text-purple-400", border: "border-purple-200 dark:border-purple-500/20" },
+    slate: { bg: "bg-slate-50 dark:bg-slate-500/10", text: "text-slate-600 dark:text-slate-400", border: "border-slate-200 dark:border-slate-500/20" },
+  };
+
+  const CardContent = () => (
+    <div className={`rounded-2xl p-6 border ${colorMap[color].border} bg-white dark:bg-slate-900 shadow-sm hover:shadow-md transition-all duration-200 group ${href ? 'cursor-pointer hover:-translate-y-1' : ''}`}>
+      <div className="flex items-start justify-between mb-4">
+        <div className={`p-3 rounded-xl ${colorMap[color].bg}`}>
+          <Icon className={`h-5 w-5 ${colorMap[color].text}`} />
+        </div>
+        {href && (
+          <ArrowUpRight className="h-4 w-4 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+        )}
       </div>
-      <div className="h-8 w-16 bg-slate-200 dark:bg-slate-800 rounded mb-2" />
-      <div className="h-3 w-24 bg-slate-200 dark:bg-slate-800 rounded" />
+      <p className={`text-3xl font-extrabold ${colorMap[color].text} mb-1`}>
+        {typeof value === 'number' ? value.toLocaleString() : value}
+      </p>
+      <p className="text-sm font-semibold text-slate-900 dark:text-white mb-1">{title}</p>
+      <p className="text-xs text-slate-500 dark:text-slate-400">{subtitle}</p>
     </div>
   );
+
+  if (href) {
+    return (
+      <Link href={href}>
+        <CardContent />
+      </Link>
+    );
+  }
+  return <CardContent />;
 }
 
-function SkeletonChart() {
-  return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200/80 dark:border-slate-800 animate-pulse">
-      <div className="h-5 w-40 bg-slate-200 dark:bg-slate-800 rounded mb-4" />
-      <div className="h-64 bg-slate-100 dark:bg-slate-800/50 rounded-xl" />
-    </div>
-  );
-}
+// ============================================
+// MAIN DASHBOARD COMPONENT
+// ============================================
+export default function RegistryDashboard() {
+  const { hasPermission, loading: authLoading, isAuthenticated } = useAuth();
+  const router = useRouter();
 
-// ==================== PIE CHART COLORS ====================
-const PIE_COLORS = ["#10b981", "#3b82f6", "#f59e0b", "#a855f7", "#ef4444", "#06b6d4", "#84cc16", "#f97316"];
+  // State
+  const [stats, setStats] = useState<DashboardStats>({
+    totalCertificates: 0,
+    readyForCollection: 0,
+    awaitingCollection: 0,
+    collected: 0,
+    onHold: 0,
+    pendingVerification: 0,
+    appointmentsToday: 0,
+    clearedStudents: 0,
+  });
+  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
+  const [certificates, setCertificates] = useState<CertificateItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
 
-// ==================== MAIN DASHBOARD ====================
-export default function DashboardPage() {
-  const { user, isStudent, isFinance, isExamination, isDean, isRegistry, isAuditor, isAdmin } = useAuth();
-
-  // Real data states
-  const [stats, setStats] = useState<any>(null);
-  const [trendData, setTrendData] = useState<TrendData[]>([]);
-  const [activityFeed, setActivityFeed] = useState<ActivityItem[]>([]);
-  const [programData, setProgramData] = useState<any[]>([]);
-  const [bottleneckData, setBottleneckData] = useState<any[]>([]);
-
-  // Loading states per section
-  const [statsLoading, setStatsLoading] = useState(true);
-  const [trendLoading, setTrendLoading] = useState(true);
-  const [activityLoading, setActivityLoading] = useState(true);
-
-  // Error states per section
-  const [statsError, setStatsError] = useState<string | null>(null);
-  const [trendError, setTrendError] = useState<string | null>(null);
-  const [activityError, setActivityError] = useState<string | null>(null);
-
-  // Last updated timestamp
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [autoRefresh, setAutoRefresh] = useState(true);
-
-  // ==================== DATA FETCHING ====================
-  const fetchStats = useCallback(async () => {
-    setStatsLoading(true);
-    setStatsError(null);
-    try {
-      const res = await clearanceApi.getStats();
-      setStats(res.data);
-    } catch (error: any) {
-      setStatsError(error.message || "Failed to load stats");
-      console.error("Stats fetch error:", error);
-    } finally {
-      setStatsLoading(false);
-    }
-  }, []);
-
-  const fetchTrend = useCallback(async () => {
-    setTrendLoading(true);
-    setTrendError(null);
-    try {
-      const res = await clearanceApi.getTrend();
-      setTrendData(res.data || []);
-    } catch (error: any) {
-      setTrendError(error.message || "Failed to load trend");
-      console.error("Trend fetch error:", error);
-    } finally {
-      setTrendLoading(false);
-    }
-  }, []);
-
-  const fetchActivity = useCallback(async () => {
-    setActivityLoading(true);
-    setActivityError(null);
-    try {
-      const token = localStorage.getItem("token") || localStorage.getItem("access_token") || "";
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const res = await fetch(`${apiUrl}/admin/monitoring/activity?limit=10`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setActivityFeed(data || []);
-      } else {
-        setActivityError(`HTTP ${res.status}`);
+  // Security Guard
+  useEffect(() => {
+    if (!authLoading) {
+      if (!isAuthenticated) {
+        router.replace("/login");
+      } else if (!hasPermission(Permission.REGISTRY_VIEW_DASHBOARD) && !hasPermission(Permission.DASHBOARD_VIEW_REGISTRY)) {
+        router.replace("/dashboard");
       }
-    } catch (error: any) {
-      setActivityError(error.message || "Failed to load activity");
-      console.error("Activity fetch error:", error);
+    }
+  }, [authLoading, isAuthenticated, hasPermission, router]);
+
+  // Fetch Data
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    setLoading(true);
+    try {
+      // Simulate API calls - replace with actual API calls
+      const mockStats: DashboardStats = {
+        totalCertificates: 124,
+        readyForCollection: 86,
+        awaitingCollection: 42,
+        collected: 918,
+        onHold: 5,
+        pendingVerification: 7,
+        appointmentsToday: 12,
+        clearedStudents: 103,
+      };
+      setStats(mockStats);
+
+      const mockActivity: RecentActivity[] = [
+        { id: 1, user: "John Doe", action: "Released Certificate", details: "CERT-2024-001 to Jane Smith", timestamp: new Date().toISOString() },
+        { id: 2, user: "Mary Wanjiku", action: "Verified Identity", details: "Student ID: KNP/2022/001", timestamp: new Date(Date.now() - 1800000).toISOString() },
+        { id: 3, user: "Peter Ochieng", action: "Scheduled Appointment", details: "For John Kamau on 2024-12-20", timestamp: new Date(Date.now() - 7200000).toISOString() },
+        { id: 4, user: "System", action: "Auto-Cleared", details: "Finance clearance for 5 students", timestamp: new Date(Date.now() - 14400000).toISOString() },
+        { id: 5, user: "James Mwangi", action: "Marked Ready", details: "Certificate CERT-2024-045 marked ready", timestamp: new Date(Date.now() - 21600000).toISOString() },
+      ];
+      setRecentActivity(mockActivity);
+
+      const mockCertificates: CertificateItem[] = [
+        { id: 1, certificateNumber: "CERT-2024-001", studentName: "John Kamau", studentId: "KNP/2022/001", programme: "ICT", status: "Ready", location: "Main Vault, Shelf 4B", createdAt: "2024-01-15" },
+        { id: 2, certificateNumber: "CERT-2024-002", studentName: "Mary Wanjiku", studentId: "KNP/2021/043", programme: "Business Admin", status: "Ready", location: "Main Vault, Shelf 3A", createdAt: "2024-01-14" },
+        { id: 3, certificateNumber: "CERT-2024-003", studentName: "Peter Mwangi", studentId: "KNP/2022/087", programme: "Electrical", status: "On Hold", location: "Hold Section", createdAt: "2024-01-13" },
+        { id: 4, certificateNumber: "CERT-2024-004", studentName: "Jane Njeri", studentId: "KNP/2022/101", programme: "Nursing", status: "Collected", location: "Archived", createdAt: "2024-01-12" },
+        { id: 5, certificateNumber: "CERT-2024-005", studentName: "David Odhiambo", studentId: "KNP/2022/045", programme: "Engineering", status: "Pending", location: "Processing", createdAt: "2024-01-11" },
+      ];
+      setCertificates(mockCertificates);
+    } catch (error) {
+      console.error("Failed to fetch dashboard data:", error);
+      toast.error("Failed to load dashboard data");
     } finally {
-      setActivityLoading(false);
+      setLoading(false);
     }
-  }, []);
-
-  const fetchPrograms = useCallback(async () => {
-    try {
-      const res = await clearanceApi.getPrograms();
-      setProgramData(res.data || []);
-    } catch (error) {
-      console.error("Programs fetch error:", error);
-    }
-  }, []);
-
-  const fetchBottlenecks = useCallback(async () => {
-    try {
-      const res = await clearanceApi.getBottlenecks();
-      setBottleneckData(res.data || []);
-    } catch (error) {
-      console.error("Bottlenecks fetch error:", error);
-    }
-  }, []);
-
-  const refreshAll = useCallback(async () => {
-    await Promise.all([fetchStats(), fetchTrend(), fetchActivity(), fetchPrograms(), fetchBottlenecks()]);
-    setLastUpdated(new Date());
-  }, [fetchStats, fetchTrend, fetchActivity, fetchPrograms, fetchBottlenecks]);
-
-  // Initial load
-  useEffect(() => {
-    refreshAll();
-  }, []);
-
-  // Auto-refresh every 30 seconds
-  useEffect(() => {
-    if (!autoRefresh) return;
-    const interval = setInterval(refreshAll, 30000);
-    return () => clearInterval(interval);
-  }, [autoRefresh, refreshAll]);
-
-  // ==================== EXPORT CSV ====================
-  const exportReport = () => {
-    if (!stats) return;
-    const rows = [
-      ["Metric", "Value"],
-      ["Total Students", stats.total_students || 0],
-      ["Pending Clearances", stats.pending_clearance || 0],
-      ["In Progress", stats.in_progress_clearance || 0],
-      ["Fully Cleared", stats.cleared_students || 0],
-      ["Finance Pending", stats.finance_pending || 0],
-      ["Finance Cleared", stats.finance_cleared || 0],
-      ["Exam Pending", stats.examination_pending || 0],
-      ["Exam Cleared", stats.examination_cleared || 0],
-      ["Certificates Ready", stats.certificates_ready || 0],
-      ["Certificates Collected", stats.certificates_collected || 0],
-    ];
-    const csv = rows.map(r => r.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `clearance_report_${new Date().toISOString().split("T")[0]}.csv`;
-    a.click();
-    toast.success("📥 Report exported!");
-  };
-
-  // ==================== ROLE HELPERS ====================
-  const getRoleBadgeTitle = () => {
-    if (isStudent()) return "Student Portal";
-    if (isFinance()) return "Finance Division";
-    if (isExamination()) return "Examinations Desk";
-    if (isDean()) return "Dean's Office";
-    if (isRegistry()) return "Registry & Certificates";
-    if (isAuditor()) return "Audit & Compliance";
-    if (isAdmin()) return "Executive Administration";
-    return "Portal Access";
-  };
-
-  const getRoleDescription = () => {
-    if (isStudent()) return "Track your clearance progress across institutional departments.";
-    if (isFinance()) return "Review, audit, and approve student fee settlement clearances.";
-    if (isExamination()) return "Verify academic records, transcript status, and exam eligibility.";
-    if (isDean()) return "Oversee faculty clearance operations and student approvals.";
-    if (isRegistry()) return "Manage certificate issuance, collection schedules, and student archives.";
-    if (isAuditor()) return "Monitor system access logs, clearance workflows, and compliance.";
-    if (isAdmin()) return "Institutional clearance dashboard and operational metrics overview.";
-    return "";
-  };
-
-  // ==================== ACTIVITY ICON MAPPING ====================
-  const getActivityIcon = (action: string) => {
-    if (action.includes("CLEARED") || action.includes("APPROVED")) return { icon: CheckCircle2, color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-950/40" };
-    if (action.includes("REJECTED") || action.includes("NOT_CLEARED")) return { icon: XCircle, color: "text-rose-500", bg: "bg-rose-50 dark:bg-rose-950/40" };
-    if (action.includes("UPDATED") || action.includes("SUBMITTED")) return { icon: RefreshCw, color: "text-blue-500", bg: "bg-blue-50 dark:bg-blue-950/40" };
-    return { icon: Activity, color: "text-slate-500", bg: "bg-slate-50 dark:bg-slate-800" };
   };
 
   const timeAgo = (timestamp: string) => {
@@ -240,356 +195,291 @@ export default function DashboardPage() {
     return `${Math.floor(hrs / 24)}d ago`;
   };
 
-  // ==================== RENDER ====================
+  const getStatusBadge = (status: string) => {
+    const styles: Record<string, string> = {
+      Ready: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/30",
+      Pending: "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400 border-amber-200 dark:border-amber-500/30",
+      "On Hold": "bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-400 border-rose-200 dark:border-rose-500/30",
+      Collected: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400 border-blue-200 dark:border-blue-500/30",
+    };
+    return (
+      <span className={`px-2.5 py-1 text-xs font-semibold rounded-full border ${styles[status] || styles.Pending}`}>
+        {status}
+      </span>
+    );
+  };
+
+  const filteredCertificates = certificates.filter(cert => {
+    const matchesSearch = cert.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         cert.certificateNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         cert.studentId.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === "all" || cert.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  // Loading State
+  if (authLoading || !isAuthenticated) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-slate-50 dark:bg-slate-950">
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-emerald-500 border-t-transparent"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50/60 dark:bg-slate-950 text-slate-800 dark:text-slate-200 transition-colors">
       <TopBar />
       <div className="flex">
         <Sidebar />
-
         <main className="flex-1 ml-64 p-6 lg:p-8 min-h-screen">
+          <div className="mx-auto max-w-7xl space-y-6">
 
-          {/* ===== WELCOME HERO ===== */}
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200/80 dark:border-slate-800 mb-8 relative overflow-hidden">
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-600 via-amber-500 to-emerald-700" />
+            {/* ===== HEADER ===== */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-2.5 flex-wrap">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/80">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    {getRoleBadgeTitle()}
-                  </span>
-                  {lastUpdated && (
-                    <span className="text-xs text-slate-400 dark:text-slate-500 flex items-center gap-1">
-                      <Clock className="h-3 w-3" /> Updated {timeAgo(lastUpdated.toISOString())}
-                    </span>
-                  )}
-                  <button onClick={() => setAutoRefresh(!autoRefresh)} className={`text-xs px-2 py-0.5 rounded-full border flex items-center gap-1 ${autoRefresh ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 border-emerald-200 dark:border-emerald-800" : "bg-slate-50 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700"}`}>
-                    {autoRefresh ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
-                    {autoRefresh ? "Live" : "Paused"}
-                  </button>
-                </div>
-                <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-                  Welcome back, {user?.username || "Authorized User"} 👋
+              <div>
+                <h1 className="text-3xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <PackageCheck className="h-8 w-8 text-emerald-500" />
+                  Registry Dashboard
                 </h1>
-                <p className="text-sm text-slate-500 dark:text-slate-400">{getRoleDescription()}</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                  Manage certificates, collections, and student verifications
+                </p>
               </div>
-              <div className="flex items-center gap-3 self-start md:self-auto">
-                <button onClick={refreshAll} className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-xs transition-all flex items-center gap-1.5">
-                  <RefreshCw className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> Refresh
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={fetchDashboardData}
+                  className="px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-2 shadow-sm"
+                >
+                  <RefreshCw className="h-4 w-4" /> Refresh
                 </button>
-                {(isAdmin() || isAuditor()) && (
-                  <button onClick={exportReport} className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition-all flex items-center gap-1.5 shadow-sm">
-                    <Download className="w-3.5 h-3.5" /> Export
-                  </button>
-                )}
+                <button className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-semibold transition-colors flex items-center gap-2 shadow-sm">
+                  <Plus className="h-4 w-4" /> New Certificate
+                </button>
               </div>
             </div>
-          </div>
 
-          {/* ===== KPI CARDS ===== */}
-          <div className="mb-8">
-            {statsLoading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                {[1,2,3,4].map(i => <SkeletonCard key={i} />)}
-              </div>
-            ) : statsError ? (
-              <div className="bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-800 rounded-2xl p-6 text-center">
-                <AlertTriangle className="h-8 w-8 text-rose-500 mx-auto mb-2" />
-                <p className="text-sm font-semibold text-rose-700 dark:text-rose-300">Failed to load statistics</p>
-                <p className="text-xs text-rose-500 mt-1">{statsError}</p>
-                <button onClick={fetchStats} className="mt-3 px-4 py-1.5 bg-rose-600 text-white rounded-lg text-xs font-bold">Retry</button>
-              </div>
-            ) : stats && (
-              <>
-                {/* Admin KPIs */}
-                {isAdmin() && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <Link href="/clearance/overview">
-                      <PremiumKPICard title="Total Students" value={stats.total_students || 0} subtitle="Enrolled database" icon={Users} color="blue" />
-                    </Link>
-                    <Link href="/clearance/overview?status=pending">
-                      <PremiumKPICard title="Pending Clearances" value={stats.pending_clearance || 0} subtitle="Awaiting review" icon={Clock} color="amber" />
-                    </Link>
-                    <Link href="/clearance/overview?status=in_progress">
-                      <PremiumKPICard title="In Progress" value={stats.in_progress_clearance || 0} subtitle="Active checks" icon={TrendingUp} color="purple" />
-                    </Link>
-                    <Link href="/clearance/overview?status=cleared">
-                      <PremiumKPICard title="Fully Cleared" value={stats.cleared_students || 0} subtitle="Graduation ready" icon={CheckCircle2} color="emerald" />
-                    </Link>
+            {/* ===== STATS CARDS ===== */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              <StatCard
+                title="Total Certificates"
+                value={stats.totalCertificates}
+                subtitle="In inventory"
+                icon={FileText}
+                color="slate"
+              />
+              <StatCard
+                title="Ready for Collection"
+                value={stats.readyForCollection}
+                subtitle="Available now"
+                icon={Award}
+                color="emerald"
+                href="/dashboard/registry?filter=ready"
+              />
+              <StatCard
+                title="Awaiting Collection"
+                value={stats.awaitingCollection}
+                subtitle="Ready but not collected"
+                icon={Clock}
+                color="amber"
+                href="/dashboard/registry?filter=awaiting"
+              />
+              <StatCard
+                title="Collected"
+                value={stats.collected}
+                subtitle="Successfully released"
+                icon={CheckCircle2}
+                color="blue"
+              />
+            </div>
+
+            {/* ===== SECONDARY STATS ===== */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <StatCard
+                title="On Hold"
+                value={stats.onHold}
+                subtitle="Blocked certificates"
+                icon={XCircle}
+                color="rose"
+              />
+              <StatCard
+                title="Pending Verification"
+                value={stats.pendingVerification}
+                subtitle="Identity checks"
+                icon={UserCheck}
+                color="purple"
+              />
+              <StatCard
+                title="Appointments Today"
+                value={stats.appointmentsToday}
+                subtitle="Scheduled collections"
+                icon={Calendar}
+                color="blue"
+              />
+              <StatCard
+                title="Cleared Students"
+                value={stats.clearedStudents}
+                subtitle="Ready for graduation"
+                icon={Users}
+                color="emerald"
+              />
+            </div>
+
+            {/* ===== MAIN CONTENT ===== */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+              {/* ===== CERTIFICATE TABLE ===== */}
+              <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden">
+                <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-emerald-500" />
+                      Recent Certificates
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Latest additions to inventory</p>
                   </div>
-                )}
-
-                {/* Finance KPIs */}
-                {isFinance() && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <Link href="/clearance/finance"><PremiumKPICard title="Pending Review" value={stats.finance_pending || 0} subtitle="Settlement audits" icon={Clock} color="amber" /></Link>
-                    <Link href="/clearance/finance?status=cleared"><PremiumKPICard title="Cleared" value={stats.finance_cleared || 0} subtitle="Approved" icon={CheckCircle2} color="emerald" /></Link>
-                    <Link href="/clearance/finance?status=not_cleared"><PremiumKPICard title="Rejected" value={stats.finance_not_cleared || 0} subtitle="Fee arrears" icon={XCircle} color="rose" /></Link>
-                    <Link href="/finance/balances"><PremiumKPICard title="Total Enrolled" value={stats.total_students || 0} subtitle="Student directory" icon={Users} color="blue" /></Link>
-                  </div>
-                )}
-
-                {/* Examination KPIs */}
-                {isExamination() && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <Link href="/clearance/examination"><PremiumKPICard title="Pending Audits" value={stats.examination_pending || 0} subtitle="Transcript signoff" icon={Clock} color="amber" /></Link>
-                    <Link href="/clearance/examination?status=cleared"><PremiumKPICard title="Academically Cleared" value={stats.examination_cleared || 0} subtitle="Verified" icon={CheckCircle2} color="emerald" /></Link>
-                    <Link href="/clearance/examination?status=not_cleared"><PremiumKPICard title="Academic Holds" value={stats.examination_not_cleared || 0} subtitle="Pending requirements" icon={XCircle} color="rose" /></Link>
-                    <Link href="/clearance/overview"><PremiumKPICard title="Total Candidates" value={stats.total_students || 0} subtitle="Exam roster" icon={GraduationCap} color="purple" /></Link>
-                  </div>
-                )}
-
-                {/* Dean KPIs */}
-                {isDean() && (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <Link href="/clearance/dean"><PremiumKPICard title="Pending Reviews" value={stats.pending_clearance || 0} subtitle="Faculty queue" icon={Clock} color="purple" /></Link>
-                    <Link href="/clearance/dean?status=in_progress"><PremiumKPICard title="In Progress" value={stats.in_progress_clearance || 0} subtitle="Cross-dept checks" icon={TrendingUp} color="amber" /></Link>
-                    <Link href="/clearance/dean?status=cleared"><PremiumKPICard title="Fully Cleared" value={stats.cleared_students || 0} subtitle="Degree ready" icon={GraduationCap} color="emerald" /></Link>
-                  </div>
-                )}
-
-                {/* Registry KPIs */}
-                {isRegistry() && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <Link href="/registry"><PremiumKPICard title="Cleared Candidates" value={stats.cleared_students || 0} subtitle="Eligible for dispatch" icon={Users} color="emerald" /></Link>
-                    <Link href="/registry?status=ready"><PremiumKPICard title="Certificates Ready" value={stats.certificates_ready || 0} subtitle="Available for pickup" icon={Award} color="blue" /></Link>
-                    <Link href="/registry/collections"><PremiumKPICard title="Certificates Issued" value={stats.certificates_collected || 0} subtitle="Handed to alumni" icon={CheckCircle2} color="purple" /></Link>
-                    <Link href="/registry/collections"><PremiumKPICard title="Scheduled Appointments" value={stats.appointments_scheduled || 0} subtitle="Booked slots" icon={Calendar} color="amber" /></Link>
-                  </div>
-                )}
-
-                {/* Auditor KPIs */}
-                {isAuditor() && (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <Link href="/clearance/overview"><PremiumKPICard title="Total Students" value={stats.total_students || 0} subtitle="Registered ledger" icon={Users} color="blue" /></Link>
-                    <Link href="/clearance/overview?status=cleared"><PremiumKPICard title="Cleared Records" value={stats.cleared_students || 0} subtitle="Audit verified" icon={CheckCircle2} color="emerald" /></Link>
-                    <Link href="/clearance/overview?status=pending"><PremiumKPICard title="Pending" value={stats.pending_clearance || 0} subtitle="Under audit" icon={Clock} color="amber" /></Link>
-                  </div>
-                )}
-
-                {/* Student KPIs */}
-                {isStudent() && (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <PremiumKPICard title="Clearance Status" value="Pending Review" subtitle="Awaiting verification" icon={Clock} color="amber" />
-                    <PremiumKPICard title="Degree Certificate" value="Not Ready" subtitle="Upon final clearance" icon={Award} color="rose" />
-                    <PremiumKPICard title="Notifications" value="0 New" subtitle="All up to date" icon={FileText} color="emerald" />
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-
-          {/* ===== ANALYTICS CHARTS (Admin/Auditor only) ===== */}
-          {(isAdmin() || isAuditor()) && (
-            <>
-              {/* Trend Chart + Activity Feed */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-                {/* Trend Chart */}
-                <div className="lg:col-span-2">
-                  {trendLoading ? <SkeletonChart /> : trendError ? (
-                    <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200/80 dark:border-slate-800 text-center">
-                      <AlertTriangle className="h-8 w-8 text-amber-500 mx-auto mb-2" />
-                      <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">Failed to load trend data</p>
-                      <button onClick={fetchTrend} className="mt-3 px-4 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold">Retry</button>
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Search..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-9 pr-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50 text-slate-900 dark:text-white w-36 sm:w-48"
+                      />
                     </div>
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                      className="px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50 text-slate-700 dark:text-slate-300"
+                    >
+                      <option value="all">All Status</option>
+                      <option value="Ready">Ready</option>
+                      <option value="Pending">Pending</option>
+                      <option value="On Hold">On Hold</option>
+                      <option value="Collected">Collected</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50 dark:bg-slate-800/50 text-xs uppercase text-slate-500 dark:text-slate-400">
+                      <tr>
+                        <th className="px-4 py-3 text-left font-semibold">Certificate</th>
+                        <th className="px-4 py-3 text-left font-semibold">Student</th>
+                        <th className="px-4 py-3 text-left font-semibold">Programme</th>
+                        <th className="px-4 py-3 text-left font-semibold">Status</th>
+                        <th className="px-4 py-3 text-left font-semibold">Location</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                      {filteredCertificates.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="px-4 py-8 text-center text-slate-500 dark:text-slate-400">
+                            No certificates found
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredCertificates.map((cert) => (
+                          <tr key={cert.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                            <td className="px-4 py-3 font-medium text-slate-900 dark:text-white font-mono text-xs">
+                              {cert.certificateNumber}
+                            </td>
+                            <td className="px-4 py-3">
+                              <p className="font-medium text-slate-900 dark:text-white">{cert.studentName}</p>
+                              <p className="text-xs text-slate-500 dark:text-slate-400">{cert.studentId}</p>
+                            </td>
+                            <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{cert.programme}</td>
+                            <td className="px-4 py-3">{getStatusBadge(cert.status)}</td>
+                            <td className="px-4 py-3 text-slate-600 dark:text-slate-300 text-xs">{cert.location}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* ===== ACTIVITY FEED ===== */}
+              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm overflow-hidden">
+                <div className="p-5 border-b border-slate-200 dark:border-slate-800">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        <Activity className="h-4 w-4 text-emerald-500" />
+                        Recent Activity
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Live updates from the registry</p>
+                    </div>
+                    <span className="text-xs text-slate-400 dark:text-slate-500 font-mono">{recentActivity.length} events</span>
+                  </div>
+                </div>
+                <div className="p-4 max-h-96 overflow-y-auto">
+                  {recentActivity.length === 0 ? (
+                    <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-6">No recent activity</p>
                   ) : (
-                    <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-sm">
-                      <div className="flex items-center justify-between mb-6">
-                        <div>
-                          <h3 className="text-base font-bold text-slate-900 dark:text-white">Clearance Velocity</h3>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Real data from audit logs — last 7 days</p>
+                    <div className="space-y-3">
+                      {recentActivity.map((item) => (
+                        <div key={item.id} className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/30 border border-slate-100 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors">
+                          <div className="p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex-shrink-0">
+                            <Activity className="h-3.5 w-3.5" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium text-slate-900 dark:text-white">
+                              {item.user}
+                            </p>
+                            <p className="text-xs text-slate-600 dark:text-slate-300">
+                              {item.action}
+                            </p>
+                            <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 truncate">
+                              {item.details}
+                            </p>
+                            <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 flex items-center gap-1">
+                              <Clock className="h-2.5 w-2.5" /> {timeAgo(item.timestamp)}
+                            </p>
+                          </div>
                         </div>
-                        <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/80 flex items-center gap-1">
-                          <Activity className="h-3 w-3" /> Live Data
-                        </span>
-                      </div>
-                      <div className="h-64">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={trendData}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" className="dark:opacity-10" vertical={false} />
-                            <XAxis dataKey="day" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
-                            <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
-                            <Tooltip contentStyle={{ backgroundColor: "#0f172a", border: "1px solid #334155", borderRadius: "12px", color: "#f8fafc" }} />
-                            <Line type="monotone" dataKey="cleared" stroke="#10b981" strokeWidth={3} dot={{ r: 4, fill: "#10b981", strokeWidth: 2, stroke: "#fff" }} name="Cleared" />
-                            <Line type="monotone" dataKey="pending" stroke="#f59e0b" strokeWidth={3} dot={{ r: 4, fill: "#f59e0b", strokeWidth: 2, stroke: "#fff" }} strokeDasharray="5 5" name="Pending" />
-                          </LineChart>
-                        </ResponsiveContainer>
-                      </div>
+                      ))}
                     </div>
                   )}
-                </div>
-
-                {/* Activity Feed */}
-                <div>
-                  {activityLoading ? (
-                    <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200/80 dark:border-slate-800 animate-pulse">
-                      <div className="h-5 w-32 bg-slate-200 dark:bg-slate-800 rounded mb-4" />
-                      {[1,2,3,4,5].map(i => <div key={i} className="h-12 bg-slate-100 dark:bg-slate-800/50 rounded-xl mb-3" />)}
-                    </div>
-                  ) : activityError ? (
-                    <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200/80 dark:border-slate-800 text-center">
-                      <AlertTriangle className="h-8 w-8 text-amber-500 mx-auto mb-2" />
-                      <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">Failed to load activity</p>
-                      <button onClick={fetchActivity} className="mt-3 px-4 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold">Retry</button>
-                    </div>
-                  ) : (
-                    <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-sm">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                          <Activity className="h-4 w-4 text-emerald-500 animate-pulse" /> Live Activity
-                        </h3>
-                        <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">{activityFeed.length} events</span>
-                      </div>
-                      <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
-                        {activityFeed.length === 0 ? (
-                          <p className="text-xs text-slate-400 dark:text-slate-500 text-center py-8">No recent activity</p>
-                        ) : (
-                          activityFeed.map((item) => {
-                            const { icon: Icon, color, bg } = getActivityIcon(item.action);
-                            return (
-                              <div key={item.id} className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800">
-                                <div className={`p-1.5 rounded-lg ${bg} flex-shrink-0`}>
-                                  <Icon className={`h-3.5 w-3.5 ${color}`} />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs text-slate-900 dark:text-slate-200">
-                                    <span className="font-bold">{item.user || "System"}</span>
-                                    <span className="text-slate-500 dark:text-slate-400 ml-1">{item.action?.replace(/_/g, " ").toLowerCase()}</span>
-                                  </p>
-                                  <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 truncate">{item.details || item.module}</p>
-                                  <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 flex items-center gap-1">
-                                    <Clock className="h-2.5 w-2.5" /> {timeAgo(item.timestamp)}
-                                  </p>
-                                </div>
-                              </div>
-                            );
-                          })
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* ===== ADVANCED ANALYTICS (All Departments) ===== */}
-          {(programData.length > 0 || bottleneckData.length > 0) && (
-            <div className="mb-8">
-              <h2 className="text-sm font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2 mb-4">
-                <BarChart3 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                Advanced Analytics
-              </h2>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-                {/* Pie Chart: Program Distribution */}
-                <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-sm">
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white mb-4">Program Distribution</h3>
-                  <div className="h-72">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={programData}
-                          dataKey="count"
-                          nameKey="program"
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={100}
-                          label={({ program, count }) => `${program}: ${count}`}
-                        >
-                          {programData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip contentStyle={{ backgroundColor: "#0f172a", border: "1px solid #334155", borderRadius: "8px", color: "#f8fafc" }} />
-                        <Legend />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-
-                {/* Department Bottlenecks Bar Chart */}
-                <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-sm">
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white mb-4">Department Bottlenecks</h3>
-                  <div className="h-72">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={bottleneckData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" className="dark:opacity-10" vertical={false} />
-                        <XAxis dataKey="department" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
-                        <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
-                        <Tooltip contentStyle={{ backgroundColor: "#0f172a", border: "1px solid #334155", borderRadius: "8px", color: "#f8fafc" }} />
-                        <Bar dataKey="pending" name="Pending" radius={[8, 8, 0, 0]}>
-                          {bottleneckData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color || PIE_COLORS[index]} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
                 </div>
               </div>
             </div>
-          )}
 
-          {/* ===== DEPARTMENTAL BREAKDOWN (Admin only) ===== */}
-          {isAdmin() && stats && !statsLoading && (
-            <div className="mb-8">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-sm font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
-                  <Building2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                  Departmental Operations
-                </h2>
-                <button onClick={exportReport} className="text-xs text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 font-medium">
-                  <Download className="h-3 w-3" /> Export CSV
+            {/* ===== QUICK ACTIONS ===== */}
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm p-6">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                <Settings className="h-4 w-4 text-emerald-500" />
+                Quick Actions
+              </h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <button className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-emerald-500 dark:hover:border-emerald-500/50 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-all group text-left">
+                  <UserCheck className="h-5 w-5 text-emerald-600 dark:text-emerald-400 mb-2" />
+                  <p className="text-sm font-semibold text-slate-900 dark:text-white">Verify Student</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Identity check</p>
+                </button>
+                <button className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500/50 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-all group text-left">
+                  <Calendar className="h-5 w-5 text-blue-600 dark:text-blue-400 mb-2" />
+                  <p className="text-sm font-semibold text-slate-900 dark:text-white">Schedule Collection</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Set appointment</p>
+                </button>
+                <button className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-purple-500 dark:hover:border-purple-500/50 hover:bg-purple-50 dark:hover:bg-purple-500/10 transition-all group text-left">
+                  <Award className="h-5 w-5 text-purple-600 dark:text-purple-400 mb-2" />
+                  <p className="text-sm font-semibold text-slate-900 dark:text-white">Release Certificate</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Final handover</p>
+                </button>
+                <button className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-amber-500 dark:hover:border-amber-500/50 hover:bg-amber-50 dark:hover:bg-amber-500/10 transition-all group text-left">
+                  <FileText className="h-5 w-5 text-amber-600 dark:text-amber-400 mb-2" />
+                  <p className="text-sm font-semibold text-slate-900 dark:text-white">Generate Report</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Export data</p>
                 </button>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Finance Card */}
-                <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-sm">
-                  <div className="flex items-center gap-2.5 mb-4">
-                    <div className="p-2 bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 rounded-xl border border-amber-200/60 dark:border-amber-800/60"><DollarSign className="h-5 w-5" /></div>
-                    <h3 className="text-base font-bold text-slate-900 dark:text-white">Finance Division</h3>
-                  </div>
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center text-xs"><span className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-amber-500" /> Pending</span><span className="font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded border border-amber-200/60 dark:border-amber-800/60">{stats.finance_pending || 0}</span></div>
-                    <div className="flex justify-between items-center text-xs"><span className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> Cleared</span><span className="font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-200/60 dark:border-emerald-800/60">{stats.finance_cleared || 0}</span></div>
-                    <div className="flex justify-between items-center text-xs"><span className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5"><XCircle className="w-3.5 h-3.5 text-rose-500" /> Rejected</span><span className="font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/60 px-2 py-0.5 rounded border border-rose-200/60 dark:border-rose-800/60">{stats.finance_not_cleared || 0}</span></div>
-                  </div>
-                </div>
-                {/* Exams Card */}
-                <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-sm">
-                  <div className="flex items-center gap-2.5 mb-4">
-                    <div className="p-2 bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 rounded-xl border border-blue-200/60 dark:border-blue-800/60"><BookOpen className="h-5 w-5" /></div>
-                    <h3 className="text-base font-bold text-slate-900 dark:text-white">Examinations Office</h3>
-                  </div>
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center text-xs"><span className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-amber-500" /> Pending</span><span className="font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 rounded border border-amber-200/60 dark:border-amber-800/60">{stats.examination_pending || 0}</span></div>
-                    <div className="flex justify-between items-center text-xs"><span className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> Cleared</span><span className="font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-200/60 dark:border-emerald-800/60">{stats.examination_cleared || 0}</span></div>
-                    <div className="flex justify-between items-center text-xs"><span className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5"><XCircle className="w-3.5 h-3.5 text-rose-500" /> Rejected</span><span className="font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/60 px-2 py-0.5 rounded border border-rose-200/60 dark:border-rose-800/60">{stats.examination_not_cleared || 0}</span></div>
-                  </div>
-                </div>
-                {/* Registry Card */}
-                <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-sm">
-                  <div className="flex items-center gap-2.5 mb-4">
-                    <div className="p-2 bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 rounded-xl border border-purple-200/60 dark:border-purple-800/60"><Layers className="h-5 w-5" /></div>
-                    <h3 className="text-base font-bold text-slate-900 dark:text-white">Registry & Archive</h3>
-                  </div>
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center text-xs"><span className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5"><Award className="w-3.5 h-3.5 text-blue-500" /> Ready</span><span className="font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-2 py-0.5 rounded border border-blue-200/60 dark:border-blue-800/60">{stats.certificates_ready || 0}</span></div>
-                    <div className="flex justify-between items-center text-xs"><span className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 text-purple-500" /> Issued</span><span className="font-bold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded border border-purple-200/60 dark:border-purple-800/60">{stats.certificates_collected || 0}</span></div>
-                  </div>
-                </div>
-              </div>
             </div>
-          )}
 
+          </div>
         </main>
       </div>
-
-      {/* ADD THIS LINE HERE */}
-      <WelcomeModal />
-
     </div>
   );
 }

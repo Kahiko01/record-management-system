@@ -6,38 +6,52 @@ import { useTheme } from "../context/ThemeContext";
 import { LogOut, Sun, Moon, Bell, Check, X, Inbox, Command as CommandIcon, CheckCircle2, XCircle, Info, Award } from "lucide-react";
 import CommandPalette from "./CommandPalette";
 import SessionGuard from "./SessionGuard";
-import useWebSocket from 'react-use-websocket';
 import toast from 'react-hot-toast';
 import { notificationApi } from "../lib/api";
+import { useWebSocket } from "../hooks/useWebSocket";
 
 export default function TopBar() {
   const { user, logout } = useAuth();
   const { theme, setTheme } = useTheme();
+  const wsConnectedRef = useRef(false);
 
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [loading, setLoading] = useState(true);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // 🚀 WEEK 1: Connect to Live WebSocket Feed based on user role
-  const wsUrl = user ? `ws://localhost:8000/ws/${user.role}` : null;
-
-  useWebSocket(wsUrl, {
-    onMessage: (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === "CERTIFICATE_READY") {
-          toast.success(`🔔 ${data.message}`, {
-            duration: 5000,
-            style: { background: '#10b981', color: '#fff' }
-          });
-          fetchNotifications();
-        }
-      } catch (e) {
-        console.error("WebSocket parse error", e);
+  // 🚀 Real-time notifications via secure WebSocket (only once)
+  const { isConnected } = useWebSocket({
+    onMessage: (message) => {
+      if (!message || !message.type) return;
+      
+      const msgData = message.data || {};
+      const msgText = msgData.message || msgData.details || "New notification";
+      
+      if (message.type === "CERTIFICATE_READY") {
+        toast.success(`🔔 ${msgText}`, {
+          duration: 5000,
+          style: { background: '#10b981', color: '#fff' }
+        });
+        fetchNotifications();
+      } else if (message.type === "NOTIFICATION") {
+        toast.success(`🔔 ${msgText}`, {
+          duration: 5000,
+          style: { background: '#3b82f6', color: '#fff' }
+        });
+        fetchNotifications();
+      } else if (message.type === "SECURITY_EVENT") {
+        const severity = msgData.severity || "info";
+        const icon = severity === "critical" ? "🚨" : severity === "high" ? "⚠️" : "ℹ️";
+        toast(`${icon} ${msgData.action || "Security Event"}: ${msgData.subject_username || "System"}`, {
+          duration: 6000,
+          style: { background: '#1e293b', color: '#f8fafc', border: '1px solid #334155' }
+        });
       }
+      // Ignore other message types (AUDIT_EVENT, CONNECTION_ESTABLISHED, etc.)
     },
-    shouldReconnect: () => true,
+    reconnectInterval: 10000,  // Wait 10 seconds before reconnecting
+    maxReconnectAttempts: 3    // Only try 3 times
   });
 
   useEffect(() => {

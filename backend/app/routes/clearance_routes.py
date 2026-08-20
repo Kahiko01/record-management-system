@@ -494,7 +494,8 @@ async def mark_certificate_ready(
         new_status="ready_for_collection",
         ip_address=request.client.host if request.client else None,
         user_agent=request.headers.get("user-agent"),
-        severity="info"
+        severity="info",
+        subject_username=current_user.username  # <-- ADDED THIS LINE
     )
 
     # WebSocket broadcast

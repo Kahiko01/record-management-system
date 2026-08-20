@@ -5,7 +5,7 @@ from datetime import timedelta
 from collections import defaultdict
 import time
 from ..core.database import get_db
-from ..models.models import User
+from ..models.models import User, UserRole
 from ..schemas.schemas import UserCreate, UserResponse, Token
 from ..auth.auth import (
     authenticate_user, create_access_token, get_password_hash,
@@ -49,7 +49,7 @@ async def register_user(
         username=user_data.username,
         full_name=user_data.full_name,
         hashed_password=hashed_password,
-        role=user_data.role
+        active_role_id=user_data.active_role_id  # ✅ FIXED: Use active_role_id instead of role
     )
     db.add(db_user)
     db.commit()
@@ -61,7 +61,7 @@ async def register_user(
         metadata={
             "username": user_data.username,
             "email": user_data.email,
-            "role": user_data.role,
+            "role": user_data.active_role_id,
             "registered_by": current_user.username
         },
         subject_username=user_data.username,
@@ -149,15 +149,58 @@ async def login(
         )
         raise HTTPException(status_code=400, detail="Inactive user account")
 
-    # 4. Create the JWT Token
-    access_token = create_access_token(data={"sub": user.username})
+    # 🚫 BLOCK STUDENT LOGINS (students don't have accounts, but just in case)
+    # Check if user has student role
+    has_student_role = False
+    if user.roles:
+        for role in user.roles:
+            if role.name == "student":
+                has_student_role = True
+                break
+    elif user.active_role and user.active_role.name == "student":
+        has_student_role = True
+
+    if has_student_role:
+        await log_audit(
+            db, user.id, "LOGIN_BLOCKED", "auth",
+            details=f"Student login attempt blocked: {user.username}",
+            metadata={
+                "username": user.username,
+                "role": "student",
+                "ip_address": client_ip,
+                "user_agent": user_agent,
+                "block_reason": "Student accounts do not have system access"
+            },
+            subject_username=user.username,
+            ip_address=client_ip,
+            user_agent=user_agent,
+            severity="info",
+            request_id=ctx.request_id
+        )
+        raise HTTPException(
+            status_code=403,
+            detail="Students do not have system access. Please contact the registry office."
+        )
+
+    # 4. Create the JWT Token - FIXED
+    # Get the active role name (or first role if no active role)
+    active_role_name = None
+    if user.active_role:
+        active_role_name = user.active_role.name
+    elif user.roles:
+        active_role_name = user.roles[0].name
+    
+    # Fallback to super_admin if no role found
+    if not active_role_name:
+        active_role_name = "super_admin"
+
+    # Create token with username and role
+    access_token = create_access_token(
+        data={"sub": user.username, "role": active_role_name}  # ✅ FIXED
+    )
 
     # 5. Safely get the role name for the frontend
-    role_name = "student"
-    if user.active_role:
-        role_name = user.active_role.name
-    elif user.role:
-        role_name = str(user.role)
+    role_name = active_role_name
 
     # 6. Fetch user's granted tasks
     from ..models.models import UserTask, Task

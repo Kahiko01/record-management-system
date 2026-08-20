@@ -15,19 +15,33 @@ export default function AdminAuditPage() {
   const [filters, setFilters] = useState({ search: "", action: "", user_id: "" });
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
 
   useEffect(() => {
     fetchData();
   }, [currentPage]);
 
   const fetchData = async () => {
-    setLoading(true);
     try {
-      const response = await auditApi.getLogs({ ...filters, page: currentPage, limit: 50 });
-      setLogs(response.data?.logs || []);
-      setTotalPages(response.data?.total_pages || 1);
+      setLoading(true);
+      const offset = (currentPage - 1) * 50;
+
+      const response = await auditApi.getLogs({
+        search: filters.search || undefined,
+        action: filters.action || undefined,
+        user_id: filters.user_id || undefined,
+        limit: 50,
+        offset: offset
+      });
+
+      // Handle the new paginated response format
+      const data = response.data;
+      setLogs(Array.isArray(data) ? data : (data.items || []));
+      setTotalCount(data.total || (Array.isArray(data) ? data.length : 0));
+
     } catch (error) {
       console.error("Failed to fetch audit logs:", error);
+      setLogs([]);
     } finally {
       setLoading(false);
     }
@@ -131,11 +145,27 @@ export default function AdminAuditPage() {
                     logs.map((log) => (
                       <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/30 transition-colors">
                         <td className="px-6 py-4 text-sm">
-                          <p className="font-semibold text-gray-900 dark:text-white flex items-center gap-1"><Clock className="h-3 w-3" /> {new Date(log.timestamp).toLocaleString()}</p>
+                          <div className="flex items-center gap-1">
+                            <Clock className="h-3 w-3 text-gray-400 dark:text-slate-500" />
+                            {log.timestamp ? (
+                              new Date(log.timestamp).toLocaleString('en-KE', {
+                                timeZone: 'Africa/Nairobi',
+                                year: 'numeric',
+                                month: 'short',
+                                day: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                second: '2-digit',
+                                hour12: true
+                              })
+                            ) : (
+                              <span className="text-gray-400 dark:text-slate-500">N/A</span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-6 py-4 text-sm">
-                          <p className="text-gray-700 dark:text-slate-300">{log.user?.username || "System"}</p>
-                          <p className="text-xs text-gray-500 dark:text-slate-500">{log.user?.role || "N/A"}</p>
+                          <p className="text-gray-700 dark:text-slate-300 font-medium">{log.user || "System"}</p>
+                          <p className="text-xs text-gray-500 dark:text-slate-500">{log.metadata?.role || "N/A"}</p>
                         </td>
                         <td className="px-6 py-4">{getActionBadge(log.action)}</td>
                         <td className="px-6 py-4 text-sm text-gray-700 dark:text-slate-300 max-w-md truncate">{log.details}</td>
@@ -150,7 +180,7 @@ export default function AdminAuditPage() {
           {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between mt-6">
-              <p className="text-sm text-gray-500 dark:text-slate-400">Page {currentPage} of {totalPages}</p>
+              <p className="text-sm text-gray-500 dark:text-slate-400">Page {currentPage} of {totalPages} ({totalCount} total records)</p>
               <div className="flex gap-2">
                 <button onClick={() => setCurrentPage(Math.max(1, currentPage - 1))} disabled={currentPage === 1} className="px-4 py-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">Previous</button>
                 <button onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages} className="px-4 py-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg text-sm font-medium text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">Next</button>

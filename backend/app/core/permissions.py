@@ -156,16 +156,18 @@ class Permission(str, Enum):
     ADMIN_RESET_PASSWORDS = "admin:reset_passwords"
     ADMIN_VIEW_AUDIT = "admin:view_audit"
     ADMIN_VIEW_MONITORING = "admin:view_monitoring"
+
 # ============= 2. ROLE TO PERMISSIONS MAPPING (THE KEYCHAINS) =============
 
 ROLE_PERMISSIONS = {
-    UserRole.STUDENT: [
-        Permission.STUDENT_VIEW_CERTIFICATE_STATUS, Permission.STUDENT_VIEW_COLLECTION_STATUS,
-        Permission.STUDENT_VIEW_CLEARANCE_PROGRESS, Permission.STUDENT_UPDATE_CONTACT,
-        Permission.STUDENT_VIEW_APPOINTMENT, Permission.STUDENT_CANCEL_APPOINTMENT,
-        Permission.STUDENT_RESCHEDULE_APPOINTMENT, Permission.STUDENT_APPLY_CLEARANCE,
-        Permission.STUDENT_VIEW_OWN_NOTIFICATIONS, Permission.DASHBOARD_VIEW_STUDENT,
-    ],
+    # 🚫 REMOVED: Students don't have system access
+    # UserRole.STUDENT: [
+    #     Permission.STUDENT_VIEW_CERTIFICATE_STATUS, Permission.STUDENT_VIEW_COLLECTION_STATUS,
+    #     Permission.STUDENT_VIEW_CLEARANCE_PROGRESS, Permission.STUDENT_UPDATE_CONTACT,
+    #     Permission.STUDENT_VIEW_APPOINTMENT, Permission.STUDENT_CANCEL_APPOINTMENT,
+    #     Permission.STUDENT_RESCHEDULE_APPOINTMENT, Permission.STUDENT_APPLY_CLEARANCE,
+    #     Permission.STUDENT_VIEW_OWN_NOTIFICATIONS, Permission.DASHBOARD_VIEW_STUDENT,
+    # ],
 
     UserRole.FINANCE: [
         Permission.FINANCE_VIEW_DASHBOARD, Permission.FINANCE_SEARCH_STUDENTS,

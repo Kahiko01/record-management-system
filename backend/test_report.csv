@@ -1,0 +1,76 @@
+ID,Timestamp,User,Action,Module,Severity,Details,IP Address,User Agent,Request ID,Entry Hash
+1,2026-08-10T10:35:58,admin,DEAN_CLEARANCE_UPDATED,dean,info,"Status: cleared. Remarks: None. Checklist: [Academic Records Verified: Yes, Faculty Requirements Met: Yes, No Disciplinary Actions: Yes, Graduation Eligibility Confirmed: Yes]",,,,
+2,2026-08-10T10:36:11,admin,DEAN_CLEARANCE_UPDATED,dean,info,"Status: not_cleared. Remarks: None. Checklist: [Academic Records Verified: No, Faculty Requirements Met: No, No Disciplinary Actions: No, Graduation Eligibility Confirmed: No]",,,,
+5,2026-08-10T10:57:07,admin,FINANCE_CLEARANCE_UPDATED,finance,info,Status: cleared. Remarks: None,,,,
+4,2026-08-10T10:57:07,admin,FINANCE_CLEARANCE_UPDATED,finance,info,Status: cleared. Remarks: None,,,,
+3,2026-08-10T10:57:07,admin,FINANCE_CLEARANCE_UPDATED,finance,info,Status: cleared. Remarks: None,,,,
+6,2026-08-11T06:50:11,finance_officer,FINANCE_CLEARANCE_UPDATED,finance,info,Status: cleared. Remarks: None,,,,
+7,2026-08-12T12:10:39,admin,USER_TASKS_UPDATED,user_management,info,Updated tasks for user: finance_officer,,,,
+8,2026-08-12T12:13:18,admin,USER_TASKS_UPDATED,user_management,info,Updated tasks for user: finance_officer,,,,
+9,2026-08-12T12:30:47,admin,USER_TASKS_UPDATED,user_management,info,Updated tasks for user: admin,,,,
+10,2026-08-12T12:31:52,admin,USER_TASKS_UPDATED,user_management,info,Updated tasks for user: finance_officer,,,,
+11,2026-08-12T12:32:24,admin,USER_TASKS_UPDATED,user_management,info,Updated tasks for user: finance_officer,,,,
+12,2026-08-12T13:31:01,admin,USER_TASKS_UPDATED,user_management,info,Updated tasks for user: registry_officer,,,,
+13,2026-08-12T13:55:30,admin,USER_CREATED,admin,info,Created new user: Amos,,,,
+14,2026-08-12T13:56:52,admin,USER_CREATED,admin,info,Created new user: kahiko,,,,
+15,2026-08-12T13:57:11,admin,USER_TASKS_UPDATED,user_management,info,Updated tasks for user: kahiko,,,,
+16,2026-08-13T06:03:07,registry_officer,STUDENTS_BULK_IMPORTED,student_management,info,"Imported 3 students, skipped 0",,,,
+17,2026-08-13T06:33:33,admin,USER_TASKS_UPDATED,user_management,info,Updated tasks for user: registry_officer,,,,
+18,2026-08-13T07:21:49,admin,USER_TASKS_UPDATED,user_management,info,Updated tasks for user: registry_officer,,,,
+19,2026-08-14T08:27:25,admin,USER_TASKS_UPDATED,user_management,info,Updated tasks for user: registry_officer,,,,
+20,2026-08-14T08:57:50,admin,USER_TASKS_UPDATED,user_management,info,Updated tasks for user: registry_officer,,,,
+21,2026-08-14T08:59:42,admin,USER_TASKS_UPDATED,user_management,info,Updated tasks for user: registry_officer,,,,
+22,2026-08-14T09:19:58,admin,USER_TASKS_UPDATED,user_management,info,Updated tasks for user: registry_officer,,,,
+23,2026-08-14T09:20:28,admin,STUDENTS_BULK_IMPORTED,student_management,info,"Imported 0 students, skipped 3",,,,
+24,2026-08-19T08:50:33,admin,LOGIN_FAILED,auth,high,Failed login attempt for username 'admin' from IP 127.0.0.1,127.0.0.1,curl/8.20.0,,
+25,2026-08-19T08:50:34,ghost_user_xyz,LOGIN_FAILED,auth,high,Failed login attempt for username 'ghost_user_xyz' from IP 127.0.0.1,127.0.0.1,curl/8.20.0,,
+26,2026-08-19T09:08:08,registry_officer,LOGIN_FAILED,auth,high,Failed login attempt for username 'registry_officer' from IP 127.0.0.1,127.0.0.1,curl/8.20.0,,
+27,2026-08-19T09:08:33,registry_officer,LOGIN_FAILED,auth,high,Failed login attempt for username 'registry_officer' from IP 127.0.0.1,127.0.0.1,curl/8.20.0,,
+28,2026-08-19T09:11:17,registry_officer,LOGIN_SUCCESS,auth,info,User logged in: registry_officer,127.0.0.1,curl/8.20.0,,
+30,2026-08-19T09:14:23,registry_officer,PERMISSION_DENIED,auth,high,User attempted to access a resource requiring 'admin:manage_users',127.0.0.1,curl/8.20.0,,
+29,2026-08-19T09:14:23,registry_officer,LOGIN_SUCCESS,auth,info,User logged in: registry_officer,127.0.0.1,curl/8.20.0,,
+31,2026-08-19T09:39:35,testuser,LOGIN_FAILED,auth,high,Failed login attempt for username 'testuser' from IP 127.0.0.1,127.0.0.1,curl/8.20.0,,
+32,2026-08-19T09:49:57,testuser,LOGIN_FAILED,auth,high,Failed login attempt for username 'testuser' from IP 127.0.0.1,127.0.0.1,curl/8.20.0,,
+33,2026-08-19T10:30:19,testuser,LOGIN_FAILED,auth,high,Failed login attempt for username 'testuser' from IP 127.0.0.1,127.0.0.1,curl/8.20.0,00213bad-293b-4536-9b40-6ee92a5ec6e9,
+34,2026-08-19T10:35:41,admin,LOGIN_SUCCESS,auth,info,User logged in: admin,127.0.0.1,curl/8.20.0,c5a647f0-679a-44d1-b91b-351c975285a5,
+35,2026-08-19T10:51:30,test,LOGIN_FAILED,auth,high,Failed login attempt for username 'test' from IP 127.0.0.1,127.0.0.1,curl/8.20.0,30151df1-6beb-4974-a58f-0e3d718215f8,
+38,2026-08-19T10:57:17,test3,LOGIN_FAILED,auth,high,Failed login attempt for username 'test3' from IP 127.0.0.1,127.0.0.1,curl/8.20.0,15da4d50-458d-44ef-ab80-915605c2293c,38ab5e0749efd48cf640d9b0426a03a974b43df58939cad094f92332da1124da
+37,2026-08-19T10:57:17,test2,LOGIN_FAILED,auth,high,Failed login attempt for username 'test2' from IP 127.0.0.1,127.0.0.1,curl/8.20.0,b20ef057-3e4f-4ad1-8176-bdd9b74e23e5,fdf727316a647bc2bf4b0022849eb92062f2d3cb5cb47f3e2a948312fd2e7044
+36,2026-08-19T10:57:17,test1,LOGIN_FAILED,auth,high,Failed login attempt for username 'test1' from IP 127.0.0.1,127.0.0.1,curl/8.20.0,276d3251-d577-4ce1-806e-bff88ab502ef,dfe446495a6149b71e0ea9ee874ffad4a73b223beab6a0745298c9df08ed7621
+39,2026-08-19T11:02:14,test,LOGIN_FAILED,auth,high,Failed login attempt for username 'test' from IP 127.0.0.1,127.0.0.1,curl/8.20.0,7f56f9ca-dd12-4849-9ddb-08872c7d41ef,7c624025a729a0ade84df4e8f69b324b6dab0f5f28f7a8eb47bf57096b21f3c7
+40,2026-08-19T11:02:15,admin,LOGIN_SUCCESS,auth,info,User logged in: admin,127.0.0.1,curl/8.20.0,8e771591-8ba9-46f9-bf91-88b51c57c441,d6081e89784a4a5769dfee8a0ee61307538d3e5585cb43f1993ec8c4793c3e7f
+41,2026-08-19T11:12:36,admin,LOGIN_SUCCESS,auth,info,User logged in: admin,172.26.80.1,"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",cd668a6a-890c-40e5-8ea7-2f9dbdd35216,af991d2bab918ce21fe246f7bafd2770a9e7b50f18300b088cff9dfa88528b6e
+42,2026-08-19T11:26:20,admin,LOGIN_SUCCESS,auth,info,User logged in: admin,172.26.80.1,"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",7c855ce5-f4e3-45fc-b58c-ac117664b810,e175c17130fcc2bff6547b3aecbba45df88ae98a9d076eb39da2c01cf4a107aa
+43,2026-08-19T12:02:08,admin,LOGIN_SUCCESS,auth,info,User logged in: admin,172.26.80.1,"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",0f150bbd-130b-41ef-bdd0-62e2db02e36d,a475391c322017412c68b613643ff44db9420c8904367ac8e077bf3387776e6e
+44,2026-08-19T12:19:57,hacker,LOGIN_FAILED,auth,high,Failed login attempt for username 'hacker' from IP 127.0.0.1,127.0.0.1,curl/8.20.0,873ccae2-818f-47af-930b-7dfde56e35ac,1b994bf2b6b2581dbca75f1e219e6fd2c93d21f2a67f86c97d88131a93a1a8c0
+45,2026-08-19T12:30:06,hacker,LOGIN_FAILED,auth,high,Failed login attempt for username 'hacker' from IP 127.0.0.1,127.0.0.1,curl/8.20.0,f185b0dd-c79b-4fff-9ca1-5e57ff159177,2b18d3f0043e7100df29109015c56fddee5feea15007088c0681fa09eeae5e3d
+46,2026-08-19T12:40:12,admin,LOGIN_SUCCESS,auth,info,User logged in: admin,172.26.80.1,"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",1f05f855-571e-4c9e-b515-4189205a96ae,815c9852b7a1fc8540307baf4235feaa1c1aede670b30e4d581e80b9e28885c2
+47,2026-08-19T12:55:31,attacker,LOGIN_FAILED,auth,high,Failed login attempt for username 'attacker' from IP 127.0.0.1,127.0.0.1,curl/8.20.0,d7f5efb5-b89c-4c73-936b-f3d2c6cc4ee7,c08c2ed43ad223c2eeddc9c7edba5811c2bf69302ea9c707d30afebdf744772b
+48,2026-08-19T12:57:51,hacker,LOGIN_FAILED,auth,high,Failed login attempt for username 'hacker' from IP 127.0.0.1,127.0.0.1,curl/8.20.0,23c2bf12-bce8-42b2-b1bd-e8ad2d9c16f0,6728367f0428af1cfdd20986d7a33415ea3a4fd910ba076e8490c905e29af233
+49,2026-08-19T13:00:56,admin,LOGIN_SUCCESS,auth,info,User logged in: admin,127.0.0.1,curl/8.20.0,d7db5e85-041a-4b28-86d1-0e7fbe1cb2c1,a19c5bbcdc454746b2d8b3f188611d2e12c850d2d48469cf35821a002fbcf69d
+51,2026-08-19T13:02:32,admin,CERTIFICATE_MARKED_READY,registry,info,Marked certificate CERT-2024-002 as ready for collection,127.0.0.1,curl/8.20.0,,6ce3b624c785ffc0eb2c45bf5013fe7b0cb53b6ba43e382012e0885590a9e039
+50,2026-08-19T13:02:32,admin,LOGIN_SUCCESS,auth,info,User logged in: admin,127.0.0.1,curl/8.20.0,9ca8bd3c-5fc7-40ed-8ba9-df2fb8161b40,a8227624da6b216ade01271cfdc01968bce1dbaf47bfdf0dbedd99ab8f566324
+52,2026-08-19T13:22:06,exam_officer,LOGIN_SUCCESS,auth,info,User logged in: exam_officer,172.26.80.1,"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",52a37f48-2b0a-4424-aefb-4aec2ceef50d,efc5d45cef54257f574f765b3a4bb3edd169a31293c05074a116167e8cc66712
+53,2026-08-20T07:00:14,finance_officer,LOGIN_SUCCESS,auth,info,User logged in: finance_officer,172.26.80.1,"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",800ddf95-f63c-4353-92f2-222c9ec6bf5a,2010041807a6df06801cf41a8d48d8a19a42c77360da0116cdf6e39ea3a1a9b6
+54,2026-08-20T07:00:30,admin,LOGIN_SUCCESS,auth,info,User logged in: admin,172.26.80.1,"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",9ceb27d2-fc70-4e89-80f1-5b05a2ae6e65,5f4b7f895593cd25dd201d2f0972cfa94e520efc36d68b33f729f7bcddcb6343
+55,2026-08-20T07:00:47,admin,USER_TASKS_UPDATED,user_management,info,Updated tasks for user: finance_officer,,,,95141fad0158f30d162f5fb7c770f031dbada3dedb73ca91d88019e9e9f31ba8
+56,2026-08-20T07:00:56,finance_officer,LOGIN_SUCCESS,auth,info,User logged in: finance_officer,172.26.80.1,"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",149862a4-5fc1-4add-b919-7d37109a8d52,e99b7a379534b261854715bce289440dcddf99cca99ca4b0197dfb25bf453d5e
+58,2026-08-20T07:00:59,finance_officer,PERMISSION_DENIED,auth,high,User attempted to access a resource requiring 'finance:view_pending',172.26.80.1,"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",,2fcb2d21e99c1bfb263ef428043c8d758b0b049f7c711c6c9be150255e8d6312
+57,2026-08-20T07:00:59,finance_officer,PERMISSION_DENIED,auth,high,User attempted to access a resource requiring 'finance:view_pending',172.26.80.1,"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",,80835f158aa9ff4f46d56f2453723a9d9583dcbc12d6d16970ee02d7930f5be0
+60,2026-08-20T07:01:03,finance_officer,PERMISSION_DENIED,auth,high,User attempted to access a resource requiring 'finance:view_pending',172.26.80.1,"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",,a545fc9f445854180d47d0dc7ac277cad3b3608b793a45a66ec58d38edcdcc7a
+59,2026-08-20T07:01:03,finance_officer,PERMISSION_DENIED,auth,high,User attempted to access a resource requiring 'finance:view_pending',172.26.80.1,"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",,8d7d3771adcc98fd7fd27a64566d48f5cb471f6ad8ce42c71dac84af98a51cdd
+62,2026-08-20T07:01:14,finance_officer,PERMISSION_DENIED,auth,high,User attempted to access a resource requiring 'finance:view_pending',172.26.80.1,"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",,5e190230e6817a9ebac6d60e730504394b0e91924b8398793b41227486356d49
+61,2026-08-20T07:01:14,finance_officer,PERMISSION_DENIED,auth,high,User attempted to access a resource requiring 'finance:view_pending',172.26.80.1,"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",,b3cb96a58af77c39b31e65920a1b83521a0c439749fbc666563fc31cce23864e
+63,2026-08-20T07:07:13,admin,LOGIN_SUCCESS,auth,info,User logged in: admin,127.0.0.1,curl/8.20.0,deb40b71-2022-42d6-a17b-e3cb7b9babe1,08854fc81caca4374e9a3b59fcc8e398011fe0c3ebb1706bdccacb9af38c3827
+65,2026-08-20T07:07:39,admin,CERTIFICATE_MARKED_READY,registry,info,Marked certificate CERT-2024-003 as ready for collection,127.0.0.1,curl/8.20.0,,0b66db78a8c7f41f306307aec89ca305cbd62a58c198783f1caaceb86431f94b
+64,2026-08-20T07:07:39,admin,LOGIN_SUCCESS,auth,info,User logged in: admin,127.0.0.1,curl/8.20.0,cb16eb3e-c79d-4655-a96d-ad1db3fa67e8,c2aa1f1358ae57210badf2d50d1edf5e78828f3a6d6be361e3e313c401b6309d
+66,2026-08-20T07:08:00,admin,LOGIN_SUCCESS,auth,info,User logged in: admin,172.26.80.1,"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",780b74d0-26d7-4c73-bd0a-3a9693b4344e,6dc45aeeaec7363bb253f31ece26da33d15b74baa9dc23c01715a23c3469d621
+67,2026-08-20T07:45:42,admin,LOGIN_SUCCESS,auth,info,User logged in: admin,127.0.0.1,curl/8.20.0,cc6fb6c2-7237-433e-b0b8-ba34cd33b9b9,7e563ca2adebefd06e48bcdc71b20177f8313c2b7b97f3b1c8d1548914f74d68
+68,2026-08-20T07:46:08,admin,LOGIN_SUCCESS,auth,info,User logged in: admin,127.0.0.1,curl/8.20.0,ea25fdbf-2b79-4c6d-a147-94f39c102a22,f1f9b21022d9fb5510a5678892964b4786454a8d0f30e3d6506c4fdb2be6beb4
+69,2026-08-20T07:49:33,admin,LOGIN_SUCCESS,auth,info,User logged in: admin,172.26.80.1,"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",d5b30a28-7586-44f6-90be-98b896870913,07fea4fc901035e2ed06c2ec11ffefc411c2060ef295b157d57525a697bdc382
+70,2026-08-20T07:50:02,Amos,LOGIN_SUCCESS,auth,info,User logged in: Amos,172.26.80.1,"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",7f8708ae-6773-4c9e-b7f6-7af147ec96e0,b4cf1818a30ebb09c079be2f172e7ea49ea4d4febe0d12d9cdc199f938da4dd2
+71,2026-08-20T07:50:28,admin,LOGIN_SUCCESS,auth,info,User logged in: admin,172.26.80.1,"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",e4e55123-31a0-40a1-a98b-2f008aebc421,cab3cce2ccfdf45ee56227f952cdc08e21f012e8a0bee1883c301190ea00d9f1
+72,2026-08-20T07:58:22,hacker,LOGIN_FAILED,auth,high,Failed login attempt for username 'hacker' from IP 127.0.0.1,127.0.0.1,curl/8.20.0,832769f2-9e8f-46b5-b475-5e97db4916e3,030e42b659e797873bd8fc29d11d3f8c5ba137f64998a9c0b3fac9749b25d0a2
+73,2026-08-20T08:04:12,admin,LOGIN_SUCCESS,auth,info,User logged in: admin,127.0.0.1,curl/8.20.0,4d54dacd-80ae-461c-85fc-a2cec88fa05a,94e88dda9192db8c074c584b97fafcc68aa82d690a61b6f63670a6ae2cdb6980
+74,2026-08-20T08:13:26,admin,LOGIN_SUCCESS,auth,info,User logged in: admin,127.0.0.1,curl/8.20.0,365f6d01-92b0-4083-84b9-e422e734b6ec,0d8a904bc917ecd27fa13191faddc8197da8cee9fdcde4895ef312cdb2414579
+75,2026-08-20T08:13:53,admin,LOGIN_SUCCESS,auth,info,User logged in: admin,127.0.0.1,curl/8.20.0,6196cef5-2fca-4b11-a3b8-68cc598c7024,e20fcb8fb76ba923fd05aae54f9b5a132de6a4f0754544380b5027203ee6d188

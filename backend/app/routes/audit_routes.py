@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
+from zoneinfo import ZoneInfo
 from ..core.database import get_db
 from ..models.models import AuditLog, User
 from ..auth.auth import get_current_active_user
@@ -23,38 +24,49 @@ async def get_audit_logs(
     Requires AUDITOR_VIEW_LOGS permission.
     """
     query = db.query(AuditLog).options(joinedload(AuditLog.user))
-    
+
     if action:
         query = query.filter(AuditLog.action == action)
     if module:
         query = query.filter(AuditLog.module == module)
     if severity:
         query = query.filter(AuditLog.severity == severity)
-    
+
     query = query.order_by(AuditLog.created_at.desc())
-    
+
     logs = query.offset(offset).limit(limit).all()
-    
+
     result = []
     for log in logs:
+        # Extract user_role from metadata if available
+        user_role = None
+        if log.metadata_json and isinstance(log.metadata_json, dict):
+            user_role = log.metadata_json.get("role")
+        
         result.append({
             "id": log.id,
-            "user": log.user.username if log.user else "System",
+            "user": log.subject_username or (log.user.username if log.user else "System"),
+            "user_role": user_role,  # Role extracted from metadata
             "action": log.action,
             "module": log.module,
             "details": log.details,
             "metadata": log.metadata_json,
             "severity": log.severity,
-            "timestamp": log.created_at.isoformat() if log.created_at else None,
+            "timestamp": (
+                log.created_at.replace(tzinfo=ZoneInfo("UTC"))
+                .astimezone(ZoneInfo("Africa/Nairobi"))
+                .isoformat()
+                if log.created_at else None
+            ),
             "ip_address": log.ip_address,
             "user_agent": log.user_agent,
             "request_id": log.request_id,
             "prev_hash": log.prev_hash,
             "entry_hash": log.entry_hash
         })
-    
+
     total_count = query.count()
-    
+
     return {
         "items": result,
         "total": total_count,

@@ -19,8 +19,8 @@ export default function Sidebar() {
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
 
   const toggleExpand = (itemName: string) => {
-    setExpandedItems(prev => 
-      prev.includes(itemName) 
+    setExpandedItems(prev =>
+      prev.includes(itemName)
         ? prev.filter(name => name !== itemName)
         : [...prev, itemName]
     );
@@ -41,9 +41,8 @@ export default function Sidebar() {
       ]
     },
     {
-      title: "STUDENT SERVICES",
+      title: "STUDENT MANAGEMENT",
       items: [
-        { name: "Clearance", href: "/clearance/overview", icon: ClipboardCheck, tasks: ["student:apply_clearance", "finance:view_pending", "exam:view_pending", "dean:view_pending"] },
         { name: "Student Records", href: "/admin/students", icon: Users, tasks: ["user:view", "user:create", "search:students"] },
       ]
     },
@@ -52,10 +51,10 @@ export default function Sidebar() {
       items: [
         { name: "Finance", href: "/clearance/finance", icon: DollarSign, tasks: ["finance:view_pending", "finance:view_dashboard"] },
         { name: "Examination", href: "/clearance/examination", icon: BookOpen, tasks: ["exam:view_pending", "exam:view_dashboard"] },
-        { 
-          name: "Registry", 
-          href: "/dashboard/registry", 
-          icon: Archive, 
+        {
+          name: "Registry",
+          href: "/dashboard/registry",
+          icon: Archive,
           tasks: ["registry:view_inventory", "registry:view_dashboard"],
           children: [
             { name: "Registry Dashboard", href: "/dashboard/registry", icon: LayoutDashboard, tasks: ["registry:view_dashboard"] },
@@ -75,8 +74,9 @@ export default function Sidebar() {
     {
       title: "GOVERNANCE",
       items: [
-        { name: "Audit Trail", href: "/admin/audit", icon: ShieldCheck, tasks: ["auditor:view_logs", "admin:view_all_logs"] },
-        { name: "System Activity", href: "/admin/monitoring", icon: Activity, tasks: ["auditor:view_activity", "admin:configure_system", "admin:view_all_logs"] },
+        { name: "Audit Trail", href: "/admin/audit", icon: ShieldCheck, tasks: ["auditor:view_logs"] },
+        { name: "Reports & Analytics", href: "/reports", icon: BarChart3, tasks: ["auditor:view_reports"] },
+        { name: "Operations Center", href: "/admin/monitoring", icon: Activity, tasks: ["admin:view_monitoring"] },
       ]
     },
     {
@@ -141,7 +141,7 @@ export default function Sidebar() {
                   const isDisabled = item.disabled;
                   const hasChildren = item.children && item.children.length > 0;
                   const isExpanded = expandedItems.includes(item.name);
-                  
+
                   const visibleChildren = hasChildren ? item.children.filter(child => hasAnyTask(child.tasks)) : [];
 
                   // Render Parent with Expandable Children
@@ -151,8 +151,8 @@ export default function Sidebar() {
                         <button
                           onClick={() => toggleExpand(item.name)}
                           className={`group flex items-center justify-between w-full px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
-                            isActive || isExpanded 
-                              ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 shadow-sm' 
+                            isActive || isExpanded
+                              ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 shadow-sm'
                               : 'text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800 hover:text-gray-900 dark:hover:text-white'
                           }`}
                         >
@@ -164,7 +164,7 @@ export default function Sidebar() {
                             <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
                           )}
                         </button>
-                        
+
                         {isExpanded && !collapsed && (
                           <div className="ml-4 mt-1 space-y-1 border-l border-slate-200 dark:border-slate-700 pl-3 animate-in fade-in slide-in-from-top-1 duration-200">
                             {visibleChildren.map(child => {
@@ -176,8 +176,8 @@ export default function Sidebar() {
                                   key={child.name}
                                   href={child.href}
                                   className={`flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-                                    isChildActive 
-                                      ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20' 
+                                    isChildActive
+                                      ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20'
                                       : 'text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-slate-800'
                                   }`}
                                 >

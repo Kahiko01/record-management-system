@@ -90,28 +90,46 @@ def initialize_system():
         db.commit()
         print(f"   ✅ Created {len(DEFAULT_TASKS)} tasks")
 
-    # C. Seed Admin Accounts
+    # C. Seed Admin Accounts - FIXED
     admin_exists = db.query(User).filter(User.username == "admin").first()
     if not admin_exists:
         print("🌱 First run detected. Creating default accounts...")
 
         role_map = {
-            "super_admin": UserRole.SUPER_ADMIN, "finance": UserRole.FINANCE,
-            "examination_office": UserRole.EXAMINATION_OFFICE, "dean": UserRole.DEAN,
-            "registry_officer": UserRole.REGISTRY_OFFICER, "internal_auditor": UserRole.INTERNAL_AUDITOR,
+            "super_admin": "super_admin",
+            "finance": "finance",
+            "examination_office": "examination_office",
+            "dean": "dean",
+            "registry_officer": "registry_officer",
+            "internal_auditor": "internal_auditor",
         }
 
         for account in DEFAULT_ACCOUNTS:
+            # Get the role object from database
+            role_name = role_map.get(account["role"], "super_admin")
+            role_obj = db.query(Role).filter(Role.name == role_name).first()
+
+            # Hash the password
+            hashed_password = pwd_context.hash(account["password"])
+
+            # Create user with active_role_id
             new_user = User(
-                username=account["username"],
                 email=account["email"],
-                hashed_password=pwd_context.hash(account["password"]),
-                role=role_map.get(account["role"], UserRole.STUDENT),
+                username=account["username"],
                 full_name=account["full_name"],
-                is_active=True
+                hashed_password=hashed_password,
+                active_role_id=role_obj.id if role_obj else None,  # ✅ CORRECT - use role ID
+                department=account.get("department"),
+                is_active=True,
+                is_email_verified=True
             )
+            
+            # Add to the many-to-many roles relationship
+            if role_obj:
+                new_user.roles.append(role_obj)
+            
             db.add(new_user)
-            print(f"   ✅ Created: {account['username']}")
+            print(f"   ✅ Created: {account['username']} with role: {account['role']}")
 
         db.commit()
         print("🎉 System initialized successfully!\n")
@@ -121,11 +139,11 @@ def initialize_system():
     # D. Auto-assign default tasks to seeded users
     if db.query(UserTask).count() == 0:
         print("🌱 Assigning default tasks to seeded users...")
-        
+
         # Get all tasks from database
         all_tasks = {t.code: t.id for t in db.query(Task).all()}
         all_users = {u.username: u.id for u in db.query(User).all()}
-        
+
         # Define default task assignments per user
         default_assignments = {
             "finance_officer": [
@@ -148,7 +166,7 @@ def initialize_system():
                 "auditor_view_logs", "auditor_export_reports", "auditor_view_dashboard"
             ],
         }
-        
+
         for username, task_codes in default_assignments.items():
             user_id = all_users.get(username)
             if not user_id:
@@ -163,7 +181,7 @@ def initialize_system():
                         granted_by=all_users.get("admin")
                     ))
             print(f"   ✅ {username}: {len(task_codes)} tasks assigned")
-        
+
         db.commit()
         print("   ✅ Default task assignments complete!")
 
