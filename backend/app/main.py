@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from .routes import id_routes
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 import os
@@ -192,6 +193,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # Include routers
 app.include_router(storage_routes.router)
 app.include_router(student_import_routes.router)
+app.include_router(id_routes.router)
 app.include_router(auth_routes.router)
 app.include_router(monitoring_routes.router)
 app.include_router(student_routes.router)

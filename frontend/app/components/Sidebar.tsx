@@ -7,7 +7,8 @@ import {
   LayoutDashboard, ClipboardCheck, Users, DollarSign, BookOpen,
   Archive, Building2, Home, Scale, ShieldCheck, BarChart3, Activity,
   UserCog, Layers, Settings, ChevronLeft, ChevronRight, LogOut,
-  UserCheck, CalendarClock, PackageCheck, Clock, ChevronDown, CheckCircle
+  UserCheck, CalendarClock, PackageCheck, Clock, ChevronDown, CheckCircle,
+  CreditCard
 } from "lucide-react";
 import { useState } from "react";
 import toast from "react-hot-toast";
@@ -17,6 +18,7 @@ export default function Sidebar() {
   const { user, hasTask, logout } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
+  const [isIdMenuOpen, setIsIdMenuOpen] = useState(pathname.startsWith('/dean/id-management'));
 
   const toggleExpand = (itemName: string) => {
     setExpandedItems(prev =>
@@ -84,6 +86,14 @@ export default function Sidebar() {
       title: "ADMINISTRATION",
       items: [
         { name: "Users & Roles", href: "/admin/users", icon: UserCog, tasks: ["user:assign_role", "admin:manage_roles", "admin:manage_users", "user:view"] },
+        // ID Management Dropdown - Replaced single link with collapsible block
+        {
+          name: "ID Management",
+          href: "/dean/id-management",
+          icon: CreditCard,
+          tasks: ["admin:configure_system"],
+          isDropdown: true,
+        },
         { name: "Departments", href: "#", icon: Layers, tasks: [], disabled: true },
         { name: "Settings", href: "/admin/settings", icon: Settings, tasks: ["admin:configure_system"] },
         { name: "System Settings", href: "#", icon: Settings, tasks: [], disabled: true },
@@ -143,8 +153,117 @@ export default function Sidebar() {
                   const isDisabled = item.disabled;
                   const hasChildren = item.children && item.children.length > 0;
                   const isExpanded = expandedItems.includes(item.name);
+                  const isIdDropdown = item.isDropdown;
 
                   const visibleChildren = hasChildren ? item.children.filter(child => hasAnyTask(child.tasks)) : [];
+
+                  // Render ID Management Dropdown
+                  if (isIdDropdown) {
+                    return (
+                      <div key={item.name}>
+                        <button
+                          onClick={() => setIsIdMenuOpen(!isIdMenuOpen)}
+                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
+                            pathname.startsWith('/dean/id-management')
+                              ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 shadow-sm'
+                              : 'text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800 hover:text-gray-900 dark:hover:text-white'
+                          }`}
+                        >
+                          <Icon className={`h-5 w-5 flex-shrink-0 transition-colors ${
+                            pathname.startsWith('/dean/id-management')
+                              ? 'text-emerald-600 dark:text-emerald-400'
+                              : 'text-gray-400 dark:text-slate-500 group-hover:text-gray-600 dark:group-hover:text-slate-300'
+                          }`} />
+                          {!collapsed && (
+                            <>
+                              <span className="flex-1 text-left truncate">{item.name}</span>
+                              <svg
+                                className={`w-4 h-4 transition-transform ${isIdMenuOpen ? 'rotate-180' : ''}`}
+                                fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                              >
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                              </svg>
+                            </>
+                          )}
+                        </button>
+
+                        {isIdMenuOpen && !collapsed && (
+                          <div className="ml-8 mt-1 space-y-1 border-l border-slate-200 dark:border-slate-700 pl-4 animate-in fade-in slide-in-from-top-1 duration-200">
+                            <Link
+                              href="/dean/id-management"
+                              className={`block px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                                pathname === '/dean/id-management'
+                                  ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20'
+                                  : 'text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-slate-800'
+                              }`}
+                            >
+                              Dashboard
+                            </Link>
+                            <Link
+                              href="/dean/id-management/inventory"
+                              className={`block px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                                pathname === '/dean/id-management/inventory'
+                                  ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20'
+                                  : 'text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-slate-800'
+                              }`}
+                            >
+                              Inventory
+                            </Link>
+                            <Link
+                              href="/dean/id-management/receive-batch"
+                              className={`block px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                                pathname === '/dean/id-management/receive-batch'
+                                  ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20'
+                                  : 'text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-slate-800'
+                              }`}
+                            >
+                              Receive Batch
+                            </Link>
+                            <Link
+                              href="/dean/id-management/issue"
+                              className={`block px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                                pathname === '/dean/id-management/issue'
+                                  ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20'
+                                  : 'text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-slate-800'
+                              }`}
+                            >
+                              Issue ID
+                            </Link>
+                            <Link
+                              href="/dean/id-management/collection"
+                              className={`block px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                                pathname === '/dean/id-management/collection'
+                                  ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20'
+                                  : 'text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-slate-800'
+                              }`}
+                            >
+                              Record Collection
+                            </Link>
+                            <Link
+                              href="/dean/id-management/replace"
+                              className={`block px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                                pathname === '/dean/id-management/replace'
+                                  ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20'
+                                  : 'text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-slate-800'
+                              }`}
+                            >
+                              Lost/Damaged & Replace
+                            </Link>
+                            <Link
+                              href="/dean/id-management/audit"
+                              className={`block px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                                pathname === '/dean/id-management/audit'
+                                  ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20'
+                                  : 'text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-slate-800'
+                              }`}
+                            >
+                              Audit Logs
+                            </Link>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
 
                   // Render Parent with Expandable Children
                   if (hasChildren && visibleChildren.length > 0) {
