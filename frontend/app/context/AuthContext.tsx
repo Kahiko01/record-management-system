@@ -122,13 +122,9 @@ export enum Permission {
 }
 
 const ROLE_PERMISSIONS: Record<string, Permission[]> = {
-  student: [
-    Permission.STUDENT_VIEW_CERTIFICATE_STATUS, Permission.STUDENT_VIEW_COLLECTION_STATUS,
-    Permission.STUDENT_VIEW_CLEARANCE_PROGRESS, Permission.STUDENT_UPDATE_CONTACT,
-    Permission.STUDENT_VIEW_APPOINTMENT, Permission.STUDENT_CANCEL_APPOINTMENT,
-    Permission.STUDENT_RESCHEDULE_APPOINTMENT, Permission.STUDENT_APPLY_CLEARANCE,
-    Permission.STUDENT_VIEW_OWN_NOTIFICATIONS, Permission.DASHBOARD_VIEW_STUDENT,
-  ],
+  // 🚫 REMOVED: Students don't have system access
+  // student: [ ... ],
+
   finance: [
     Permission.FINANCE_VIEW_DASHBOARD, Permission.FINANCE_SEARCH_STUDENTS,
     Permission.FINANCE_VIEW_PENDING, Permission.FINANCE_VIEW_HISTORY,
@@ -160,7 +156,7 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
   ],
   registry_officer: [
     Permission.REGISTRY_VIEW_DASHBOARD, Permission.REGISTRY_SEARCH_CLEARED,
-Permission.REGISTRY_SEARCH_INVENTORY, Permission.REGISTRY_VIEW_INVENTORY,
+    Permission.REGISTRY_SEARCH_INVENTORY, Permission.REGISTRY_VIEW_INVENTORY,
     Permission.REGISTRY_ADD_INVENTORY, Permission.REGISTRY_UPDATE_INVENTORY,
     Permission.REGISTRY_ARCHIVE_INVENTORY, Permission.REGISTRY_REMOVE_INVENTORY,
     Permission.REGISTRY_ASSIGN_STORAGE, Permission.REGISTRY_UPDATE_STORAGE,
@@ -170,7 +166,7 @@ Permission.REGISTRY_SEARCH_INVENTORY, Permission.REGISTRY_VIEW_INVENTORY,
     Permission.REGISTRY_CANCEL_COLLECTION, Permission.REGISTRY_MANAGE_REPLACEMENT,
     Permission.REGISTRY_VIEW_REPORTS, Permission.REGISTRY_EXPORT_REPORTS,
     Permission.REGISTRY_CREATE_NOTIFICATION, Permission.STORAGE_CREATE_LOCATION,
- Permission.STORAGE_UPDATE_LOCATION, Permission.STORAGE_VIEW,
+    Permission.STORAGE_UPDATE_LOCATION, Permission.STORAGE_VIEW,
     Permission.STORAGE_ASSIGN_CERTIFICATE, Permission.STORAGE_TRANSFER_CERTIFICATE,
     Permission.SEARCH_STUDENTS, Permission.SEARCH_REGISTRY_INVENTORY,
     Permission.SEARCH_COLLECTIONS, Permission.DASHBOARD_VIEW_REGISTRY,
@@ -195,11 +191,9 @@ export interface MenuItem {
 }
 
 export const ROLE_MENUS: Record<string, MenuItem[]> = {
-  student: [
-    { title: "Student Dashboard", icon: "📊", path: "/dashboard", permissions: [Permission.DASHBOARD_VIEW_STUDENT] },
-    { title: "Clearance Status", icon: "📋", path: "/student", permissions: [Permission.STUDENT_VIEW_CLEARANCE_PROGRESS] },
-    { title: "Notifications", icon: "", path: "/notifications", permissions: [Permission.STUDENT_VIEW_OWN_NOTIFICATIONS] },
-  ],
+  // 🚫 REMOVED: Students don't have system access
+  // student: [ ... ],
+
   finance: [
     { title: "Finance Dashboard", icon: "📊", path: "/dashboard", permissions: [Permission.DASHBOARD_VIEW_FINANCE] },
     { title: "Pending Clearances", icon: "⏳", path: "/clearance/finance", permissions: [Permission.FINANCE_VIEW_PENDING] },

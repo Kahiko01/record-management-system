@@ -1,3 +1,4 @@
+import enum
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List
 from datetime import datetime
@@ -5,17 +6,19 @@ from enum import Enum
 
 # ============= ENUMS FOR SCHEMAS =============
 
-class UserRole(str, Enum):
+class UserRole(str, enum.Enum):
     SUPER_ADMIN = "super_admin"
-    REGISTRY_OFFICER = "registry_officer"
-    ACADEMIC_OFFICE = "academic_office"
+    ADMIN = "admin"
     DEAN = "dean"
-    FINANCE = "finance"
-    EXAMINATION_OFFICE = "examination_office"
-    STUDENT = "student"
-    EMPLOYER = "employer"
+    FINANCE_OFFICER = "finance_officer"
+    EXAM_OFFICER = "exam_officer"
+    REGISTRY_OFFICER = "registry_officer"
+    # --- ADD THESE 3 LINES ---
+    LIBRARY_OFFICER = "library_officer"
+    ACCOMMODATION_OFFICER = "accommodation_officer"
+    DISCIPLINE_OFFICER = "discipline_officer"
+    # -------------------------
     INTERNAL_AUDITOR = "internal_auditor"
-
 class ClearanceStatus(str, Enum):
     PENDING = "pending"
     CLEARED = "cleared"
@@ -130,15 +133,15 @@ class ClearanceRequestResponse(BaseModel):
     request_date: datetime
     overall_status: str
     collection_eligible: bool
-    collection_eligible_date: Optional[datetime] = None  # Make optional
+    collection_eligible_date: Optional[datetime] = None
     created_at: datetime
-    updated_at: Optional[datetime] = None  # Make optional
-    
+    updated_at: Optional[datetime] = None
+
     # Nested data
     student: Optional[StudentResponse] = None
     finance_clearance: Optional['FinanceClearanceResponse'] = None
     examination_clearance: Optional['ExaminationClearanceResponse'] = None
-    
+
     class Config:
         from_attributes = True
 
@@ -160,8 +163,8 @@ class FinanceClearanceResponse(BaseModel):
     cleared_by: Optional[int] = None
     cleared_at: Optional[datetime] = None
     created_at: datetime
-    updated_at: Optional[datetime] = None  # Make optional
-    
+    updated_at: Optional[datetime] = None
+
     class Config:
         from_attributes = True
 
@@ -187,8 +190,8 @@ class ExaminationClearanceResponse(BaseModel):
     cleared_by: Optional[int] = None
     cleared_at: Optional[datetime] = None
     created_at: datetime
-    updated_at: Optional[datetime] = None  # Make optional
-    
+    updated_at: Optional[datetime] = None
+
     class Config:
         from_attributes = True
 
@@ -223,7 +226,7 @@ class RegistryInventoryResponse(BaseModel):
     is_replacement: bool = False
     collection_id: Optional[int] = None
     created_at: datetime
-    updated_at: Optional[datetime] = None  # Added for consistency
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -256,7 +259,7 @@ class AppointmentResponse(BaseModel):
     notes: Optional[str] = None
     created_by: int
     created_at: datetime
-    updated_at: Optional[datetime] = None  # Added for consistency
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -386,7 +389,7 @@ class CertificateResponse(BaseModel):
     verified_count: int = 0
     last_verified_at: Optional[datetime] = None
     created_at: datetime
-    updated_at: Optional[datetime] = None  # Added for consistency
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

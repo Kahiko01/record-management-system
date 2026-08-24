@@ -1,15 +1,19 @@
+import uuid
+from datetime import datetime, timedelta
+from typing import Optional
+from jose import JWTError, jwt
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from datetime import timedelta
 from collections import defaultdict
 import time
 from ..core.database import get_db
-from ..models.models import User, UserRole
+from ..models.models import User, UserSession, Task, UserTask
 from ..schemas.schemas import UserCreate, UserResponse, Token
 from ..auth.auth import (
     authenticate_user, create_access_token, get_password_hash,
-    get_current_active_user, role_required, verify_password
+    get_current_active_user, role_required, verify_password,
+    SECRET_KEY, ALGORITHM, oauth2_scheme
 )
 from ..utils.audit import log_audit
 from ..core.context import RequestContext, get_request_context
@@ -27,7 +31,7 @@ def _rate_limited(ip: str) -> bool:
     _login_attempts[ip] = recent
     return len(recent) >= 5
 
-@router.post("/register", response_model=UserResponse)
+#@router.post("/register", response_model=UserResponse)
 async def register_user(
     user_data: UserCreate,
     db: Session = Depends(get_db),
@@ -49,7 +53,7 @@ async def register_user(
         username=user_data.username,
         full_name=user_data.full_name,
         hashed_password=hashed_password,
-        active_role_id=user_data.active_role_id  # ✅ FIXED: Use active_role_id instead of role
+        active_role_id=user_data.active_role_id
     )
     db.add(db_user)
     db.commit()
@@ -102,14 +106,12 @@ async def login(
             detail="Too many login attempts. Please wait a minute before trying again."
         )
 
-    # 1. Find the user by username
-    user = db.query(User).filter(User.username == form_data.username).first()
-
-    # 2. Verify the password
-    if not user or not verify_password(form_data.password, user.hashed_password):
+    # 1. Authenticate user
+    user = authenticate_user(db, form_data.username, form_data.password)
+    if not user:
         _login_attempts[client_ip].append(time.time())
         await log_audit(
-            db, user.id if user else None, "LOGIN_FAILED", "auth",
+            db, None, "LOGIN_FAILED", "auth",
             details=f"Failed login attempt for username '{form_data.username}' from IP {client_ip}",
             metadata={
                 "username": form_data.username,
@@ -130,7 +132,6 @@ async def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # 3. Check if user is active
     if not user.is_active:
         await log_audit(
             db, user.id, "LOGIN_INACTIVE_ACCOUNT", "auth",
@@ -147,10 +148,9 @@ async def login(
             severity="high",
             request_id=ctx.request_id
         )
-        raise HTTPException(status_code=400, detail="Inactive user account")
+        raise HTTPException(status_code=403, detail="User account is locked or inactive")
 
-    # 🚫 BLOCK STUDENT LOGINS (students don't have accounts, but just in case)
-    # Check if user has student role
+    # 🚫 BLOCK STUDENT LOGINS
     has_student_role = False
     if user.roles:
         for role in user.roles:
@@ -182,28 +182,61 @@ async def login(
             detail="Students do not have system access. Please contact the registry office."
         )
 
-    # 4. Create the JWT Token - FIXED
-    # Get the active role name (or first role if no active role)
+    # 2. Enforce Concurrent Session Limit (Max 3 active sessions)
+    MAX_SESSIONS = 3
+    active_sessions = db.query(UserSession).filter(
+        UserSession.user_id == user.id,
+        UserSession.is_active == True
+    ).order_by(UserSession.created_at.asc()).all()
+    
+    if len(active_sessions) >= MAX_SESSIONS:
+        # Revoke the oldest session to make room for the new one
+        oldest_session = active_sessions[0]
+        oldest_session.is_active = False
+        oldest_session.revoked_at = datetime.utcnow()
+        db.commit()
+        await log_audit(
+            db, user.id, "SESSION_REVOKED", "auth",
+            details=f"Oldest session revoked for user {user.username} due to concurrent session limit",
+            metadata={
+                "username": user.username,
+                "session_id": oldest_session.jti,
+                "reason": "MAX_SESSIONS_EXCEEDED",
+                "max_sessions": MAX_SESSIONS
+            },
+            subject_username=user.username,
+            ip_address=client_ip,
+            user_agent=user_agent,
+            severity="info",
+            request_id=ctx.request_id
+        )
+
+    # 3. Create new session record
+    expire_delta = timedelta(minutes=30)  # Match ACCESS_TOKEN_EXPIRE_MINUTES
+    new_jti = str(uuid.uuid4())
+    
+    new_session = UserSession(
+        user_id=user.id,
+        jti=new_jti,
+        device_info=user_agent,
+        ip_address=client_ip,
+        is_active=True,
+        expires_at=datetime.utcnow() + expire_delta
+    )
+    db.add(new_session)
+    db.commit()
+
+    # 4. Get active role name
     active_role_name = None
     if user.active_role:
         active_role_name = user.active_role.name
     elif user.roles:
         active_role_name = user.roles[0].name
     
-    # Fallback to super_admin if no role found
     if not active_role_name:
         active_role_name = "super_admin"
 
-    # Create token with username and role
-    access_token = create_access_token(
-        data={"sub": user.username, "role": active_role_name}  # ✅ FIXED
-    )
-
-    # 5. Safely get the role name for the frontend
-    role_name = active_role_name
-
-    # 6. Fetch user's granted tasks
-    from ..models.models import UserTask, Task
+    # 5. Fetch user's granted tasks
     user_tasks = db.query(UserTask).filter(
         UserTask.user_id == user.id,
         UserTask.is_enabled == True
@@ -214,6 +247,12 @@ async def login(
         if task:
             granted_task_codes.append(task.code)
 
+    # 6. Create the JWT Token with the new jti
+    access_token = create_access_token(
+        data={"sub": user.username, "role": active_role_name, "jti": new_jti},
+        expires_delta=expire_delta
+    )
+
     # 7. Clear failed attempts on successful login
     _login_attempts.pop(client_ip, None)
 
@@ -223,10 +262,12 @@ async def login(
         details=f"User logged in: {user.username}",
         metadata={
             "username": user.username,
-            "role": role_name,
+            "role": active_role_name,
             "ip_address": client_ip,
             "user_agent": user_agent,
-            "tasks_granted": len(granted_task_codes)
+            "tasks_granted": len(granted_task_codes),
+            "session_id": new_jti,
+            "active_sessions": len(active_sessions) + 1
         },
         subject_username=user.username,
         ip_address=client_ip,
@@ -235,7 +276,7 @@ async def login(
         request_id=ctx.request_id
     )
 
-    # 9. Return a CLEAN dictionary
+    # 9. Return response
     return {
         "access_token": access_token,
         "token_type": "bearer",
@@ -243,7 +284,7 @@ async def login(
             "id": user.id,
             "username": user.username,
             "email": user.email,
-            "role": role_name,
+            "role": active_role_name,
             "is_active": user.is_active,
             "granted_tasks": granted_task_codes
         }
@@ -260,21 +301,69 @@ async def logout(
     request: Request,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
-    ctx: RequestContext = Depends(get_request_context)
+    ctx: RequestContext = Depends(get_request_context),
+    token: str = Depends(oauth2_scheme)  # Extract token to get jti
 ):
     client_ip = request.client.host if request.client else "unknown"
+    user_agent = request.headers.get("user-agent", "")
+
+    # 1. Revoke the current session (JWT Blacklisting)
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        jti = payload.get("jti")
+        if jti:
+            session = db.query(UserSession).filter(UserSession.jti == jti).first()
+            if session:
+                session.is_active = False
+                session.revoked_at = datetime.utcnow()
+                db.commit()
+
+                await log_audit(
+                    db, current_user.id, "SESSION_REVOKED", "auth",
+                    details=f"Session revoked for user {current_user.username} via logout",
+                    metadata={
+                        "username": current_user.username,
+                        "session_id": jti,
+                        "reason": "USER_LOGOUT"
+                    },
+                    subject_username=current_user.username,
+                    ip_address=client_ip,
+                    user_agent=user_agent,
+                    severity="info",
+                    request_id=ctx.request_id
+                )
+    except JWTError:
+        # Token might be invalid/expired, but we still proceed with logout logging
+        await log_audit(
+            db, current_user.id, "LOGOUT_INVALID_TOKEN", "auth",
+            details=f"Logout attempted with invalid token for user {current_user.username}",
+            metadata={
+                "username": current_user.username,
+                "ip_address": client_ip,
+                "user_agent": user_agent,
+                "reason": "INVALID_TOKEN"
+            },
+            subject_username=current_user.username,
+            ip_address=client_ip,
+            user_agent=user_agent,
+            severity="warning",
+            request_id=ctx.request_id
+        )
+        pass
+
+    # 2. Audit the logout
     await log_audit(
         db, current_user.id, "USER_LOGOUT", "auth",
         details=f"User logged out: {current_user.username}",
         metadata={
             "username": current_user.username,
             "ip_address": client_ip,
-            "user_agent": request.headers.get("user-agent", ""),
+            "user_agent": user_agent,
             "session_duration_seconds": None  # Could be calculated if login time stored
         },
         subject_username=current_user.username,
         ip_address=client_ip,
-        user_agent=request.headers.get("user-agent", ""),
+        user_agent=user_agent,
         severity="info",
         request_id=ctx.request_id
     )

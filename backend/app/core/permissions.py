@@ -169,7 +169,7 @@ ROLE_PERMISSIONS = {
     #     Permission.STUDENT_VIEW_OWN_NOTIFICATIONS, Permission.DASHBOARD_VIEW_STUDENT,
     # ],
 
-    UserRole.FINANCE: [
+    UserRole.FINANCE_OFFICER: [
         Permission.FINANCE_VIEW_DASHBOARD, Permission.FINANCE_SEARCH_STUDENTS,
         Permission.FINANCE_VIEW_PENDING, Permission.FINANCE_VIEW_HISTORY,
         Permission.FINANCE_VIEW_REPORTS, Permission.FINANCE_APPROVE,
@@ -179,7 +179,7 @@ ROLE_PERMISSIONS = {
         Permission.DASHBOARD_VIEW_FINANCE,
     ],
 
-    UserRole.EXAMINATION_OFFICE: [
+    UserRole.EXAM_OFFICER: [
         Permission.EXAM_VIEW_DASHBOARD, Permission.EXAM_VIEW_PENDING,
         Permission.EXAM_VERIFY_ACADEMIC, Permission.EXAM_APPROVE,
         Permission.EXAM_REJECT, Permission.EXAM_RETURN_FOR_REVIEW,
@@ -222,6 +222,18 @@ ROLE_PERMISSIONS = {
         Permission.SEARCH_AUDIT_LOGS, Permission.SEARCH_COLLECTIONS,
         Permission.SEARCH_CLEARANCE_REQUESTS, Permission.DASHBOARD_VIEW_AUDITOR,
     ],
+
+    # --- NEW GRANULAR DEPARTMENT ROLES ---
+    UserRole.LIBRARY_OFFICER: [
+        Permission.SEARCH_STUDENTS,
+    ],
+    UserRole.ACCOMMODATION_OFFICER: [
+        Permission.SEARCH_STUDENTS,
+    ],
+    UserRole.DISCIPLINE_OFFICER: [
+        Permission.SEARCH_STUDENTS,
+    ],
+    # -------------------------------------
 }
 
 # ============= 3. PERMISSION CHECK FUNCTIONS (ZERO TRUST) =============

@@ -68,8 +68,9 @@ async def get_users(
             )
         )
 
-    if role:
-        query = query.filter(User.role == role)
+    # Note: We removed the `User.role == role` filter because the column no longer exists.
+    # Filtering by role in a many-to-many setup requires a JOIN, which we can add later if needed.
+
     if status == "active":
         query = query.filter(User.is_active == True)
     elif status == "inactive":
@@ -79,12 +80,19 @@ async def get_users(
 
     result = []
     for user in users:
+        # Safely get the user's role name (from active_role or first role in list)
+        user_role_name = "unknown"
+        if hasattr(user, 'active_role') and user.active_role:
+            user_role_name = user.active_role.name
+        elif hasattr(user, 'roles') and user.roles and len(user.roles) > 0:
+            user_role_name = user.roles[0].name
+
         result.append({
             "id": user.id,
             "username": user.username,
             "email": user.email,
             "full_name": user.full_name,
-            "role": user.role.value if hasattr(user.role, 'value') else str(user.role),
+            "role": user_role_name,
             "department": user.department,
             "is_active": user.is_active,
             "last_login": user.last_login.isoformat() if user.last_login else None,
@@ -105,15 +113,16 @@ async def create_user(
     if user_data.email and db.query(User).filter(User.email == user_data.email).first():
         raise HTTPException(status_code=400, detail="Email already exists")
 
-    # 2. Map the pretty string role to the strict UserRole Enum
+    # 2. Map the pretty string role to the strict UserRole Enum - UPDATED
     role_map = {
         "super_admin": UserRole.SUPER_ADMIN,
-        "finance": UserRole.FINANCE,
-        "examination_office": UserRole.EXAMINATION_OFFICE,
+        "admin": UserRole.ADMIN,
+        "finance": UserRole.FINANCE_OFFICER,               # <-- Updated
+        "examination_office": UserRole.EXAM_OFFICER,       # <-- Updated
         "dean": UserRole.DEAN,
-        "registry_officer": UserRole.REGISTRY_OFFICER,
+        "registry_officer": UserRole.REGISTRY_OFFICER,     # <-- Already correct
         "internal_auditor": UserRole.INTERNAL_AUDITOR,
-        # "student": UserRole.STUDENT,  # 🚫 Students don't have system access
+        "student": UserRole.STUDENT,
     }
 
     # Clean up the string (e.g. "Registry Officer" -> "registry_officer")
@@ -135,7 +144,6 @@ async def create_user(
         username=user_data.username,
         email=final_email,  # <--- USING THE BULLETPROOF EMAIL
         hashed_password=get_password_hash(user_data.password),
-        role=user_role,
         full_name=user_data.full_name or user_data.username,
         is_active=True
     )

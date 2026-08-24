@@ -89,6 +89,11 @@ export const clearanceApi = {
 
   initiateLockdown: () =>
     api.post('/admin/monitoring/lockdown'),
+
+  // Phase 3: Granular Task Management
+  getMyTasks: () => api.get('/clearance/tasks/my'),
+  updateTaskStatus: (taskId: number, data: { status: string; notes?: string }) => 
+    api.put(`/clearance/tasks/${taskId}/status`, data),
 };
 
 export const registryApi = {

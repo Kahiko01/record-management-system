@@ -15,19 +15,36 @@ export default function TopBar() {
   const { theme, setTheme } = useTheme();
   const wsConnectedRef = useRef(false);
 
+  const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Load profile photo from localStorage (scoped to username) and listen for updates
+  useEffect(() => {
+    if (user?.username) {
+      setProfilePhoto(localStorage.getItem(`profile_photo_${user.username}`));
+    }
+
+    const handlePhotoUpdate = () => {
+      if (user?.username) {
+        setProfilePhoto(localStorage.getItem(`profile_photo_${user.username}`));
+      }
+    };
+    window.addEventListener('profilePhotoUpdated', handlePhotoUpdate);
+    return () => window.removeEventListener('profilePhotoUpdated', handlePhotoUpdate);
+  }, [user?.username]);
 
   // 🚀 Real-time notifications via secure WebSocket (only once)
   const { isConnected } = useWebSocket({
     onMessage: (message) => {
       if (!message || !message.type) return;
-      
+
       const msgData = message.data || {};
       const msgText = msgData.message || msgData.details || "New notification";
-      
+
       if (message.type === "CERTIFICATE_READY") {
         toast.success(`🔔 ${msgText}`, {
           duration: 5000,
@@ -47,7 +64,15 @@ export default function TopBar() {
           duration: 6000,
           style: { background: '#1e293b', color: '#f8fafc', border: '1px solid #334155' }
         });
+      } else if (message.type === "TASK_UPDATED") {
+        // Show a smooth toast notification
+        toast(`🔔 ${msgText}`, {
+          duration: 5000,
+          style: { background: '#3b82f6', color: '#fff' }
+        });
+        fetchNotifications();
       }
+
       // Ignore other message types (AUDIT_EVENT, CONNECTION_ESTABLISHED, etc.)
     },
     reconnectInterval: 10000,  // Wait 10 seconds before reconnecting
@@ -235,9 +260,18 @@ export default function TopBar() {
 
           {/* User Profile */}
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-emerald-500 flex items-center justify-center text-white font-bold shadow-md">
-              {user?.username?.charAt(0).toUpperCase() || "U"}
-            </div>
+            {profilePhoto ? (
+              <img
+                src={profilePhoto}
+                alt="Profile"
+                onClick={() => setIsImageModalOpen(true)}
+                className="w-9 h-9 rounded-full object-cover border-2 border-white dark:border-gray-700 shadow-md cursor-pointer hover:opacity-90 transition"
+              />
+            ) : (
+              <div className="w-9 h-9 rounded-full bg-emerald-500 flex items-center justify-center text-white font-bold shadow-md">
+                {user?.username?.charAt(0).toUpperCase() || "U"}
+              </div>
+            )}
             <div className="hidden md:block">
               <p className="text-sm font-semibold text-gray-900 dark:text-white">{user?.username || "Guest"}</p>
               <p className="text-xs text-gray-500 dark:text-slate-400">{user?.role?.replace("_", " ")}</p>
@@ -254,6 +288,30 @@ export default function TopBar() {
           </button>
         </div>
       </header>
+
+      {/* WhatsApp-Style Full Screen Image Modal */}
+      {isImageModalOpen && profilePhoto && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 cursor-zoom-out animate-in fade-in duration-200"
+          onClick={() => setIsImageModalOpen(false)}
+        >
+          {/* Close Button */}
+          <button
+            onClick={() => setIsImageModalOpen(false)}
+            className="absolute top-4 right-4 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-full p-2 transition"
+          >
+            <X className="h-6 w-6" />
+          </button>
+          
+          {/* The Image */}
+          <img
+            src={profilePhoto}
+            alt="Profile Full View"
+            className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl cursor-default"
+            onClick={(e) => e.stopPropagation()} // Prevents closing when clicking the image itself
+          />
+        </div>
+      )}
     </>
   );
 }

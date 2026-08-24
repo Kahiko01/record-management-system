@@ -11,7 +11,7 @@ from ..models.models import (
     CertificateCollection, Notification, AuditLog,
     ClearanceStatus, CertificateStatus, AppointmentStatus,
     NotificationType, CollectionMethod, AcademicClearance, DeanApproval,
-    StorageLocation
+    StorageLocation, ClearanceTaskTemplate, ClearanceTask
 )
 from ..schemas.schemas import (
     ClearanceRequestCreate, ClearanceRequestResponse,
@@ -42,7 +42,35 @@ async def request_clearance(
     if existing: raise HTTPException(status_code=400, detail="Clearance request already exists")
 
     clearance_request = ClearanceRequest(student_id=student.id, student_user_id=current_user.id, overall_status="pending")
-    db.add(clearance_request); db.commit(); db.refresh(clearance_request)
+    db.add(clearance_request)
+    db.commit()
+    db.refresh(clearance_request)
+
+    # ==========================================
+    # PHASE 2: AUTO-GENERATE SUB-TASKS FROM TEMPLATES
+    # ==========================================
+    from datetime import timedelta
+    from ..models.models import ClearanceTaskTemplate, ClearanceTask
+
+    # Fetch all active templates ordered by sequence
+    templates = db.query(ClearanceTaskTemplate).filter(
+        ClearanceTaskTemplate.is_active == True
+    ).order_by(ClearanceTaskTemplate.order_index).all()
+
+    for tpl in templates:
+        # Calculate due date based on template's SLA (due_days)
+        task_due_date = datetime.utcnow() + timedelta(days=tpl.due_days)
+
+        new_task = ClearanceTask(
+            clearance_request_id=clearance_request.id,
+            template_id=tpl.id,
+            status=ClearanceStatus.PENDING,
+            priority="normal",
+            due_date=task_due_date
+        )
+        db.add(new_task)
+
+    db.commit()  # Commit the newly created sub-tasks
 
     finance = FinanceClearance(clearance_request_id=clearance_request.id, status=ClearanceStatus.PENDING)
     exam = ExaminationClearance(clearance_request_id=clearance_request.id, status=ClearanceStatus.PENDING)
@@ -495,7 +523,7 @@ async def mark_certificate_ready(
         ip_address=request.client.host if request.client else None,
         user_agent=request.headers.get("user-agent"),
         severity="info",
-        subject_username=current_user.username  # <-- ADDED THIS LINE
+        subject_username=current_user.username
     )
 
     # WebSocket broadcast
@@ -808,3 +836,156 @@ async def get_clearance_overview(
             "overall_status": overall_status
         })
     return result
+
+# ========================================
+# PHASE 3: GRANULAR TASK MANAGEMENT
+# ========================================
+from datetime import datetime
+from fastapi import Request
+from ..models.models import ClearanceTask, ClearanceTaskTemplate, ClearanceStatus
+from ..core.context import RequestContext, get_request_context
+
+@router.get("/tasks/my")
+async def get_my_tasks(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get all clearance tasks assigned to the current staff member"""
+    try:
+        tasks = db.query(ClearanceTask).join(ClearanceTaskTemplate).filter(
+            ClearanceTask.assigned_to == current_user.id
+        ).order_by(ClearanceTask.priority.desc(), ClearanceTask.due_date.asc()).all()
+        
+        result = []
+        for task in tasks:
+            # FORCE LOWERCASE status for frontend compatibility
+            status_val = task.status.value if hasattr(task.status, 'value') else str(task.status)
+            status_val = status_val.lower()  # <-- THIS IS THE FIX
+            
+            student_id = task.clearance_request.student_id if task.clearance_request else None
+            
+            result.append({
+                "id": task.id,
+                "clearance_request_id": task.clearance_request_id,
+                "template_name": task.template.name if task.template else "Unknown Task",
+                "department": task.template.department if task.template else "unknown",
+                "status": status_val,  # Now always lowercase
+                "priority": (task.priority or "normal").lower(),
+                "due_date": task.due_date.isoformat() if task.due_date else None,
+                "notes": task.notes,
+                "student_id": student_id
+            })
+        return result
+    except Exception as e:
+        print(f"❌ ERROR in get_my_tasks: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/tasks/{task_id}/status")
+async def update_task_status(
+    task_id: int,
+    status_update: dict,  # Expected: { "status": "cleared", "notes": "..." }
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+    ctx: RequestContext = Depends(get_request_context)
+):
+    """Update the status of a specific clearance task (claim, approve, reject, etc.)"""
+    task = db.query(ClearanceTask).filter(ClearanceTask.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    new_status_str = status_update.get("status")
+    notes = status_update.get("notes", task.notes or "")
+
+    # Validate status
+    valid_statuses = [s.value for s in ClearanceStatus]
+    if new_status_str not in valid_statuses:
+        raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {valid_statuses}")
+
+    old_status = task.status
+    task.status = ClearanceStatus(new_status_str)
+    task.notes = notes
+
+    # Auto-set timestamps based on status
+    if new_status_str == "in_review" and not task.started_at:
+        task.started_at = datetime.utcnow()
+        # Auto-claim if not assigned
+        if not task.assigned_to:
+            task.assigned_to = current_user.id
+    elif new_status_str in ["cleared", "not_cleared"]:
+        task.completed_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(task)
+
+    # ==========================================
+    # PHASE 4: DEPENDENCY CHAINS & GATE LOGIC
+    # ==========================================
+    # Check if ALL tasks for this specific clearance request are now 'cleared'
+    all_tasks = db.query(ClearanceTask).filter(
+        ClearanceTask.clearance_request_id == task.clearance_request_id
+    ).all()
+
+    all_cleared = all(t.status == ClearanceStatus.CLEARED for t in all_tasks)
+
+    if all_cleared and task.clearance_request.overall_status != "cleared":
+        # Upgrade the parent clearance request!
+        task.clearance_request.overall_status = "cleared"
+        task.clearance_request.collection_eligible = True
+        task.clearance_request.collection_eligible_date = datetime.utcnow()
+        db.commit()  # Save the parent update
+
+        # Audit this major milestone
+        await log_audit(
+            db, current_user.id, "CLEARANCE_FULLY_APPROVED", "clearance",
+            details=f"All sub-tasks cleared for request {task.clearance_request_id}. Student is now fully cleared for collection.",
+            subject_username=current_user.username,
+            ip_address=request.client.host if request.client else None,
+            user_agent=request.headers.get("user-agent"),
+            severity="high",
+            request_id=ctx.request_id
+        )
+
+    # ==========================================
+    # PHASE 5: REAL-TIME WEBSOCKET NOTIFICATIONS
+    # ==========================================
+    from app.core.websocket_manager import manager
+
+    # If the task was just cleared, notify the NEXT department in the chain
+    if new_status_str == "cleared":
+        # Find the next pending task for this clearance request
+        next_task = db.query(ClearanceTask).join(ClearanceTaskTemplate).filter(
+            ClearanceTask.clearance_request_id == task.clearance_request_id,
+            ClearanceTask.status == ClearanceStatus.PENDING
+        ).order_by(ClearanceTaskTemplate.order_index.asc()).first()
+
+        if next_task:
+            next_dept = next_task.template.department  # e.g., "dean", "finance"
+
+            # Broadcast to the specific role/department
+            await manager.broadcast_to_role({
+                "type": "TASK_UPDATED",
+                "data": {
+                    "action": "NEXT_IN_CHAIN",
+                    "message": f"A task was cleared. {next_dept.capitalize()} clearance is now ready for review.",
+                    "clearance_request_id": task.clearance_request_id,
+                    "next_department": next_dept,
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            }, next_dept)  # Targets users with this role
+
+    # Audit the action
+    await log_audit(
+        db, current_user.id, "TASK_STATUS_UPDATED", "clearance",
+        details=f"Task {task_id} status changed from {old_status.value} to {new_status_str}",
+        metadata={"task_id": task_id, "old_status": old_status.value, "new_status": new_status_str, "notes": notes},
+        subject_username=current_user.username,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+        severity="info",
+        request_id=ctx.request_id
+    )
+
+    return {"message": "Task status updated successfully", "task": {"id": task.id, "status": task.status.value}}

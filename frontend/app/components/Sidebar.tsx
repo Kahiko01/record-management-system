@@ -7,7 +7,7 @@ import {
   LayoutDashboard, ClipboardCheck, Users, DollarSign, BookOpen,
   Archive, Building2, Home, Scale, ShieldCheck, BarChart3, Activity,
   UserCog, Layers, Settings, ChevronLeft, ChevronRight, LogOut,
-  UserCheck, CalendarClock, PackageCheck, Clock, ChevronDown
+  UserCheck, CalendarClock, PackageCheck, Clock, ChevronDown, CheckCircle
 } from "lucide-react";
 import { useState } from "react";
 import toast from "react-hot-toast";
@@ -49,6 +49,7 @@ export default function Sidebar() {
     {
       title: "OPERATIONS",
       items: [
+        { name: "My Tasks", href: "/admin/my-tasks", icon: CheckCircle, tasks: ["task:view", "task:update"] },
         { name: "Finance", href: "/clearance/finance", icon: DollarSign, tasks: ["finance:view_pending", "finance:view_dashboard"] },
         { name: "Examination", href: "/clearance/examination", icon: BookOpen, tasks: ["exam:view_pending", "exam:view_dashboard"] },
         {
@@ -84,6 +85,7 @@ export default function Sidebar() {
       items: [
         { name: "Users & Roles", href: "/admin/users", icon: UserCog, tasks: ["user:assign_role", "admin:manage_roles", "admin:manage_users", "user:view"] },
         { name: "Departments", href: "#", icon: Layers, tasks: [], disabled: true },
+        { name: "Settings", href: "/admin/settings", icon: Settings, tasks: ["admin:configure_system"] },
         { name: "System Settings", href: "#", icon: Settings, tasks: [], disabled: true },
       ]
     },

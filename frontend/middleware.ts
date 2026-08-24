@@ -4,8 +4,8 @@ import type { NextRequest } from 'next/server';
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // 🚫 Block all student-facing routes
-  if (pathname.startsWith('/student') || pathname.startsWith('/verify')) {
+  // 🚫 Block student-facing routes (but allow /verify to be public!)
+  if (pathname.startsWith('/student')) {
     return NextResponse.redirect(new URL('/unauthorized', request.url));
   }
 
@@ -13,5 +13,6 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/student/:path*', '/verify/:path*'],
+  // Only match student routes, leaving /verify public
+  matcher: ['/student/:path*'],
 };

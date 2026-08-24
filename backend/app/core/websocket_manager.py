@@ -62,8 +62,8 @@ manager = ConnectionManager()
 def verify_websocket_token(token: str) -> Optional[dict]:
     """Verify JWT token for WebSocket authentication"""
     try:
-        secret_key = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
+        secret_key = os.getenv("SECRET_KEY", "your-super-secret-key-change-this-in-production")
         payload = jwt.decode(token, secret_key, algorithms=["HS256"])
         return payload
     except JWTError:
-        return Nonex
+        return None

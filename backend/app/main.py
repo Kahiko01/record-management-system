@@ -389,26 +389,17 @@ async def seed_dashboard_data(db: Session = Depends(get_db)):
     programs = ["Computer Science", "Business Admin", "Engineering", "Nursing", "Law"]
     for i in range(1, 21):
         student_id = f"SEED-2024-{i:03d}"
-        existing = db.query(User).filter(User.username == student_id).first()
-        if not existing:
-            user = User(
-                username=student_id,
-                email=f"seed{i}@school.edu",
-                full_name=f"Seed Student {i}",
-                hashed_password=get_password_hash("seed123"),
-                role=UserRole.STUDENT,
-                is_active=True
-            )
-            db.add(user)
-            db.commit()
-            db.refresh(user)
-
+        
+        # Check if student already exists by student_id
+        existing_student = db.query(Student).filter(Student.student_id == student_id).first()
+        if not existing_student:
+            # NO USER ACCOUNT CREATED. We link to Admin (ID 1) as the managing staff, or None.
             student = Student(
                 student_id=student_id,
-                user_id=user.id,
+                user_id=1,  # Linked to Admin as the managing staff member
                 first_name=f"SeedFirst{i}",
                 last_name=f"SeedLast{i}",
-                email=user.email,
+                email=f"seed{i}@school.edu",  # Just for contact data, not a login
                 program=random.choice(programs),
                 year_of_study=random.randint(1, 4)
             )
@@ -416,11 +407,12 @@ async def seed_dashboard_data(db: Session = Depends(get_db)):
             db.commit()
             db.refresh(student)
 
-            # Create Clearance Request
+            # Create Clearance Request (Staff initiates this on behalf of the student)
             req = ClearanceRequest(
                 student_id=student.id,
-                student_user_id=user.id,
-                overall_status="in_progress"
+                student_user_id=1,  # Initiated by Admin/Staff
+                overall_status="pending",
+                initiated_by=1
             )
             db.add(req)
             db.commit()
@@ -464,6 +456,31 @@ async def seed_dashboard_data(db: Session = Depends(get_db)):
     db.commit()
 
     return {"message": "Successfully seeded 20 students, clearances, and 10 certificates! Refresh your dashboard."}
+
+
+@app.post("/seed-task-templates")
+async def seed_task_templates(db: Session = Depends(get_db)):
+    """Seed default clearance task templates (Run this once via Postman or curl)"""
+    from app.models.models import ClearanceTaskTemplate
+
+    templates_data = [
+        {"name": "Library Clearance", "department": "library", "order_index": 1, "due_days": 2, "description": "Return all library books and settle fines"},
+        {"name": "Finance Clearance", "department": "finance", "order_index": 2, "due_days": 3, "description": "Settle all tuition and institutional fees"},
+        {"name": "Examination Clearance", "department": "examination", "order_index": 3, "due_days": 2, "description": "Verify all grades are released and no missing marks"},
+        {"name": "Dean Clearance", "department": "dean", "order_index": 4, "due_days": 1, "description": "Final departmental approval and sign-off"},
+    ]
+
+    created_count = 0
+    for data in templates_data:
+        # Check if it already exists to avoid duplicates on multiple runs
+        exists = db.query(ClearanceTaskTemplate).filter(ClearanceTaskTemplate.name == data["name"]).first()
+        if not exists:
+            new_template = ClearanceTaskTemplate(**data)
+            db.add(new_template)
+            created_count += 1
+
+    db.commit()
+    return {"message": f"Successfully seeded {created_count} task templates!"}
 
 # ============================================
 # STARTUP EVENT - Initialize system on first run

@@ -8,6 +8,20 @@ import { userApi } from "../../lib/api";
 import { User } from "../../types";
 import { Users, Search, RefreshCw, Shield, X, Upload, CheckCircle, ListChecks, Lock, ChevronRight, UserPlus } from "lucide-react";
 
+// ✅ COMPLETE GRANULAR ROLES LIST - Every department in the clearance chain!
+const AVAILABLE_ROLES = [
+  { value: "super_admin", label: "Super Admin", icon: "👑", color: "bg-red-100 text-red-700 border-red-200" },
+  { value: "admin", label: "System Admin", icon: "🛡️", color: "bg-blue-100 text-blue-700 border-blue-200" },
+  { value: "dean", label: "Dean", icon: "🎓", color: "bg-purple-100 text-purple-700 border-purple-200" },
+  { value: "finance_officer", label: "Finance Officer", icon: "💰", color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+  { value: "exam_officer", label: "Examination Officer", icon: "📝", color: "bg-indigo-100 text-indigo-700 border-indigo-200" },
+  { value: "registry_officer", label: "Registry Officer", icon: "📋", color: "bg-amber-100 text-amber-700 border-amber-200" },
+  { value: "library_officer", label: "Library Officer", icon: "📚", color: "bg-cyan-100 text-cyan-700 border-cyan-200" },
+  { value: "accommodation_officer", label: "Accommodation Officer", icon: "🏠", color: "bg-orange-100 text-orange-700 border-orange-200" },
+  { value: "discipline_officer", label: "Discipline Officer", icon: "⚖️", color: "bg-rose-100 text-rose-700 border-rose-200" },
+  { value: "internal_auditor", label: "Internal Auditor", icon: "🔍", color: "bg-gray-100 text-gray-700 border-gray-200" },
+];
+
 export default function AdminUsersPage() {
   const { hasPermission } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
@@ -181,13 +195,13 @@ export default function AdminUsersPage() {
     // 1. Fix department names (e.g. "registry" -> "Registry")
     const rawDept = task.department || "General";
     const dept = rawDept.charAt(0).toUpperCase() + rawDept.slice(1).toLowerCase();
-    
+
     if (!acc[dept]) acc[dept] = [];
-    
+
     // 2. Deduplication: Check if we already added a version of this task (colon vs underscore)
     const baseCode = task.code.replace(/:/g, '_');
     const alreadyExists = acc[dept].some((t: any) => t.code.replace(/:/g, '_') === baseCode);
-    
+
     // 3. Only add it if it's not a duplicate
     if (!alreadyExists) {
       acc[dept].push(task);
@@ -448,14 +462,17 @@ export default function AdminUsersPage() {
               </div>
               <div>
                 <label className="block text-sm font-bold text-gray-700 dark:text-slate-300 mb-1.5">Job Title (Label Only)</label>
-                <select value={newUser.role} onChange={(e) => setNewUser({ ...newUser, role: e.target.value })} className="w-full px-3 py-2.5 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50">
-                  <option value="student">Student</option>
-                  <option value="finance">Finance Officer</option>
-                  <option value="examination_office">Examination Officer</option>
-                  <option value="dean">Dean</option>
-                  <option value="registry_officer">Registry Officer</option>
-                  <option value="internal_auditor">Internal Auditor</option>
-                  <option value="super_admin">Super Admin</option>
+                <select 
+                  value={newUser.role} 
+                  onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
+                  className="w-full px-4 py-2.5 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                >
+                  <option value="">Select a role...</option>
+                  {AVAILABLE_ROLES.map((role) => (
+                    <option key={role.value} value={role.value}>
+                      {role.icon} {role.label}
+                    </option>
+                  ))}
                 </select>
                 <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1.5 font-medium">
                   ⚠️ Zero-Trust: User will be created with NO permissions. Assign tasks after creation.

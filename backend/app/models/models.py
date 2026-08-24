@@ -53,16 +53,22 @@ class Role(Base):
 
 class UserRole(str, enum.Enum):
     SUPER_ADMIN = "super_admin"
-    REGISTRY_OFFICER = "registry_officer"
-    ACADEMIC_OFFICE = "academic_office"
+    ADMIN = "admin"
     DEAN = "dean"
-    FINANCE = "finance"
-    EXAMINATION_OFFICE = "examination_office"
-    EMPLOYER = "employer"
+    FINANCE_OFFICER = "finance_officer"
+    EXAM_OFFICER = "exam_officer"
+    REGISTRY_OFFICER = "registry_officer"
+    # --- ADD THESE 3 LINES ---
+    LIBRARY_OFFICER = "library_officer"
+    ACCOMMODATION_OFFICER = "accommodation_officer"
+    DISCIPLINE_OFFICER = "discipline_officer"
+    # -------------------------
     INTERNAL_AUDITOR = "internal_auditor"
 
 class ClearanceStatus(str, enum.Enum):
     PENDING = "pending"
+    IN_REVIEW = "in_review"       # <-- ADDED
+    NEEDS_INFO = "needs_info"     # <-- ADDED
     CLEARED = "cleared"
     NOT_CLEARED = "not_cleared"
     WAITING = "waiting"
@@ -158,8 +164,14 @@ class User(Base):
     # Direct task permissions
     tasks = relationship("UserTask", back_populates="user", foreign_keys="[UserTask.user_id]")
 
-    # Role-based tasks (via role) - SIMPLIFIED: removed foreign_keys
-    role_tasks = relationship("RoleTask", secondary=role_tasks_users, viewonly=True)
+    # Role-based tasks (via role) - EXPLICIT JOINS to prevent NoForeignKeysError
+    role_tasks = relationship(
+        "RoleTask",
+        secondary=role_tasks_users,
+        primaryjoin="User.id == role_tasks_users.c.user_id",
+        secondaryjoin="RoleTask.id == role_tasks_users.c.role_task_id",
+        viewonly=True
+    )
 
     # Relationships - ALL with string foreign_keys using Class.Column notation
     students = relationship("Student", back_populates="user", foreign_keys="[Student.user_id]")
@@ -231,6 +243,9 @@ class User(Base):
                                          back_populates="created_by_user",
                                          foreign_keys="[EmailTemplate.created_by]")
 
+    # Session management relationships
+    sessions = relationship("UserSession", back_populates="user", foreign_keys="[UserSession.user_id]")
+
     __table_args__ = (
         Index('ix_users_email_active', 'email', 'is_active'),
         Index('ix_users_department', 'department'),
@@ -244,7 +259,7 @@ class Student(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     student_id = Column(String, unique=True, index=True, nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
     first_name = Column(String, nullable=False)
     last_name = Column(String, nullable=False)
     middle_name = Column(String)
@@ -309,6 +324,9 @@ class ClearanceRequest(Base):
     examination_clearance = relationship("ExaminationClearance", back_populates="clearance_request", uselist=False, foreign_keys="[ExaminationClearance.clearance_request_id]")
     academic_clearance = relationship("AcademicClearance", back_populates="clearance_request", uselist=False, foreign_keys="[AcademicClearance.clearance_request_id]")
     dean_approval = relationship("DeanApproval", back_populates="clearance_request", uselist=False, foreign_keys="[DeanApproval.clearance_request_id]")
+
+    # Granular sub-tasks
+    tasks = relationship("ClearanceTask", back_populates="clearance_request", cascade="all, delete-orphan")
 
     __table_args__ = (
         Index('ix_clearance_requests_status_date', 'overall_status', 'request_date'),
@@ -827,3 +845,76 @@ class SystemAudit(Base):
     __table_args__ = (
         Index('ix_system_audits_action_created', 'action', 'created_at'),
     )
+
+
+# ==========================================
+# USER SESSION MANAGEMENT MODEL
+# ==========================================
+
+class UserSession(Base):
+    """Track active user sessions for JWT blacklisting and concurrent limits"""
+    __tablename__ = "user_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    jti = Column(String, unique=True, index=True, nullable=False)  # JWT ID
+    device_info = Column(String, nullable=True)
+    ip_address = Column(String, nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Relationships
+    user = relationship("User", back_populates="sessions", foreign_keys="[UserSession.user_id]")
+
+
+# ==========================================
+# PHASE 1: GRANULAR CLEARANCE TASKS
+# ==========================================
+
+class ClearanceTaskTemplate(Base):
+    """Reusable task definitions for clearance workflows (The Blueprint)"""
+    __tablename__ = "clearance_task_templates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)  # e.g., "Library Book Return"
+    department = Column(String, nullable=False)  # e.g., "library", "finance"
+    description = Column(Text, nullable=True)
+    order_index = Column(Integer, default=0)  # For dependency ordering (0 = first)
+    is_active = Column(Boolean, default=True)
+    due_days = Column(Integer, default=3)  # SLA in days
+    required_documents = Column(JSON, nullable=True)  # e.g., ["receipt.pdf"]
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    tasks = relationship("ClearanceTask", back_populates="template")
+
+
+class ClearanceTask(Base):
+    """Individual task instance for a specific student's clearance (The Instance)"""
+    __tablename__ = "clearance_tasks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    clearance_request_id = Column(Integer, ForeignKey("clearance_requests.id", ondelete="CASCADE"), nullable=False)
+    template_id = Column(Integer, ForeignKey("clearance_task_templates.id"), nullable=False)
+
+    assigned_to = Column(Integer, ForeignKey("users.id"), nullable=True)  # Staff member
+
+    status = Column(Enum(ClearanceStatus), default=ClearanceStatus.PENDING)
+    priority = Column(String, default="normal")  # low, normal, high, urgent
+
+    due_date = Column(DateTime(timezone=True), nullable=True)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+
+    notes = Column(Text, nullable=True)
+    document_refs = Column(JSON, nullable=True)  # URLs to uploaded docs
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationships
+    clearance_request = relationship("ClearanceRequest", back_populates="tasks")
+    template = relationship("ClearanceTaskTemplate", back_populates="tasks")
+    assignee = relationship("User", foreign_keys=[assigned_to])
