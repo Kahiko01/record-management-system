@@ -35,6 +35,7 @@ async def create_certificate(
         certificate_number=certificate.certificate_number,
         student_id=certificate.student_id,
         programme=student.program,
+        certificate_type=certificate.certificate_type if hasattr(certificate, 'certificate_type') else "Diploma",  # <-- ADDED
         status=CertificateStatus.AWAITING_CLEARANCE
     )
     db.add(db_certificate)
@@ -51,12 +52,19 @@ async def get_certificates(
     skip: int = 0,
     limit: int = 100,
     student_id: Optional[int] = None,
+    certificate_type: Optional[str] = None,  # <-- ADDED THIS
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission(Permission.REGISTRY_VIEW_INVENTORY))
 ):
     query = db.query(RegistryInventory)
+
     if student_id:
         query = query.filter(RegistryInventory.student_id == student_id)
+
+    # <-- ADDED THIS FILTER
+    if certificate_type:
+        query = query.filter(RegistryInventory.certificate_type == certificate_type)
+
     return query.offset(skip).limit(limit).all()
 
 @router.get("/{certificate_id}", response_model=CertificateResponse)
@@ -98,8 +106,8 @@ async def verify_certificate(
     db: Session = Depends(get_db)
 ):
     """
-    PUBLIC ENDPOINT: No security guard here! 
-    This allows employers or anyone with a QR code to verify a certificate 
+    PUBLIC ENDPOINT: No security guard here!
+    This allows employers or anyone with a QR code to verify a certificate
     without needing to log into the university system.
     """
     certificate = db.query(RegistryInventory).filter(RegistryInventory.id == certificate_id).first()
@@ -116,15 +124,16 @@ async def verify_certificate(
         "status": certificate.status,
         "collection_date": certificate.collection.created_at if hasattr(certificate, 'collection') and certificate.collection else None
     }
+
 @router.get("/verify/{certificate_number}")
 async def verify_certificate_public(certificate_number: str, db: Session = Depends(get_db)):
     """Public endpoint - no auth required - to verify a certificate"""
     cert = db.query(RegistryInventory).filter(RegistryInventory.certificate_number == certificate_number).first()
     if not cert:
         return {"valid": False, "message": "Certificate not found."}
-    
+
     student = db.query(Student).filter(Student.id == cert.student_id).first()
-    
+
     return {
         "valid": True,
         "certificate_number": cert.certificate_number,
@@ -133,4 +142,39 @@ async def verify_certificate_public(certificate_number: str, db: Session = Depen
         "graduation_year": cert.graduation_year,
         "status": cert.status.value if hasattr(cert.status, 'value') else str(cert.status),
         "verified_at": datetime.utcnow().isoformat()
+    }
+
+@router.get("/stats")
+async def get_certificate_stats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission(Permission.REGISTRY_VIEW_INVENTORY))
+):
+    """Get certificate statistics for dashboard"""
+    
+    total = db.query(RegistryInventory).count()
+    
+    # Status counts
+    awaiting = db.query(RegistryInventory).filter(RegistryInventory.status == CertificateStatus.AWAITING_CLEARANCE).count()
+    in_storage = db.query(RegistryInventory).filter(RegistryInventory.status == CertificateStatus.IN_STORAGE).count()
+    ready = db.query(RegistryInventory).filter(RegistryInventory.status == CertificateStatus.READY_FOR_COLLECTION).count()
+    collected = db.query(RegistryInventory).filter(RegistryInventory.status == CertificateStatus.COLLECTED).count()
+    
+    # Certificate Type counts
+    diploma_count = db.query(RegistryInventory).filter(RegistryInventory.certificate_type == "Diploma").count()
+    craft_count = db.query(RegistryInventory).filter(RegistryInventory.certificate_type == "Craft").count()
+    transcript_count = db.query(RegistryInventory).filter(RegistryInventory.certificate_type == "Transcript").count()
+    testimonial_count = db.query(RegistryInventory).filter(RegistryInventory.certificate_type == "Testimonial").count()
+    
+    return {
+        "total_certificates": total,
+        "awaiting_clearance": awaiting,
+        "in_storage": in_storage,
+        "ready_for_collection": ready,
+        "collected": collected,
+        "by_type": {
+            "Diploma": diploma_count,
+            "Craft": craft_count,
+            "Transcript": transcript_count,
+            "Testimonial": testimonial_count
+        }
     }

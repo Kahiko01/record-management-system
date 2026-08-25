@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import Sidebar from "@/app/components/Sidebar";
 import TopBar from "@/app/components/TopBar";
-import { 
-  Users, Search, Plus, Filter, Upload, 
+import {
+  Users, Search, Plus, Filter, Upload,
   UserCheck, GraduationCap, AlertCircle, Edit, Eye,
   ChevronLeft, ChevronRight
 } from "lucide-react";
@@ -114,12 +115,11 @@ export default function StudentsPage() {
                 <p className="text-sm text-gray-500 dark:text-gray-400">Centralized student database</p>
               </div>
               <div className="flex gap-2">
-                <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition">
-                  <Upload className="w-4 h-4" /> Import CSV
-                </button>
-                <button className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition">
-                  <Plus className="w-4 h-4" /> Add Student
-                </button>
+                <Link href="/admin/students/bulk-upload" className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition">
+                  <Upload className="w-4 h-4" /> Bulk Upload
+                </Link>
+                <Link href="/admin/students/new" className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition">
+                  <Plus className="w-4 h-4" /> Add Student</Link>
               </div>
             </div>
 

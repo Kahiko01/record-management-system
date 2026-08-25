@@ -66,6 +66,10 @@ app = FastAPI(
 # CORS setup - supports both localhost and LAN access
 cors_origins = [
     "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://0.0.0.0:3000",
+    "http://127.0.0.1:3000",
+    "http://0.0.0.0:3000",
     "http://localhost:3001",
     "http://10.163.2.108:3000",
 ]
@@ -76,7 +80,7 @@ if os.getenv("CORS_ORIGINS"):
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

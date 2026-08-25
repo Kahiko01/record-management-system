@@ -92,17 +92,25 @@ export const clearanceApi = {
 
   // Phase 3: Granular Task Management
   getMyTasks: () => api.get('/clearance/tasks/my'),
-  updateTaskStatus: (taskId: number, data: { status: string; notes?: string }) => 
+  updateTaskStatus: (taskId: number, data: { status: string; notes?: string }) =>
     api.put(`/clearance/tasks/${taskId}/status`, data),
 };
 
 export const registryApi = {
+  // Certificate management
+  getCertificates: (params?: any) => api.get('/certificates', { params }),  // Updated to match backend route
+  getCertificateStats: () => api.get('/certificates/stats'),  // Updated to match backend route
+  getCertificate: (id: number) => api.get(`/certificates/${id}`),
+  createCertificate: (data: any) => api.post('/certificates', data),
+  updateCertificate: (id: number, data: any) => api.put(`/certificates/${id}`, data),
+  verifyCertificate: (id: number) => api.post(`/certificates/${id}/verify`),
+  verifyCertificatePublic: (certificateNumber: string) => api.get(`/certificates/verify/${certificateNumber}`),
+  
+  // Legacy/alternative endpoints (keep for backwards compatibility)
   addCertificate: (data: any) => api.post('/clearance/registry/inventory', data),
-  updateCertificate: (id: number, data: any) => api.put(`/clearance/registry/inventory/${id}`, data),
   getRegistryStats: () => api.get('/storage/registry/stats'),
   transitionCertificate: (id: number, data: any) => api.put(`/storage/certificates/${id}/transition`, data),
   getCollectionsReport: () => api.get('/clearance/registry/collections-report'),
-  getCertificates: (params?: any) => api.get('/clearance/registry/inventory', { params }),
   markReady: (studentId: number) => api.put(`/clearance/registry/mark-ready/${studentId}`),
   uploadCertificatePreview: (formData: FormData) => api.post('/storage/bulk-import-certificates/preview', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }

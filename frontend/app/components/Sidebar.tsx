@@ -45,7 +45,7 @@ export default function Sidebar() {
     {
       title: "STUDENT MANAGEMENT",
       items: [
-        { name: "Student Records", href: "/admin/students", icon: Users, tasks: ["user:view", "user:create", "search:students"] },
+        { name: "Student Records", href: "/admin/students", icon: Users, tasks: ["user:view", "user:create", "search:students", "registry:view_inventory"] },
       ]
     },
     {
@@ -85,7 +85,7 @@ export default function Sidebar() {
     {
       title: "ADMINISTRATION",
       items: [
-        { name: "Student Records", href: "/admin/students", icon: Users, tasks: ["user:view", "user:create", "search:students"] },
+        { name: "Student Records", href: "/admin/students", icon: Users, tasks: ["user:view", "user:create", "search:students", "registry:view_inventory"] },
         { name: "Users & Roles", href: "/admin/users", icon: UserCog, tasks: ["user:assign_role", "admin:manage_roles", "admin:manage_users", "user:view"] },
         // ID Management Dropdown - Replaced single link with collapsible block
         {

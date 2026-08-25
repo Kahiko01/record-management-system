@@ -174,7 +174,7 @@ class User(Base):
     )
 
     # Relationships - ALL with string foreign_keys using Class.Column notation
-    students = relationship("Student", back_populates="user", foreign_keys="[Student.user_id]")
+    students = relationship("Student", back_populates="user", foreign_keys="[Student.created_by]")
 
     clearance_requests = relationship("ClearanceRequest",
                                      back_populates="student_user",
@@ -258,32 +258,30 @@ class Student(Base):
     __tablename__ = "students"
 
     id = Column(Integer, primary_key=True, index=True)
-    student_id = Column(String, unique=True, index=True, nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
-    first_name = Column(String, nullable=False)
-    last_name = Column(String, nullable=False)
-    middle_name = Column(String)
-    date_of_birth = Column(String)
-    email = Column(String, nullable=False)
-    phone = Column(String)
-    address = Column(Text)
-    program = Column(String, nullable=False)
-    program_code = Column(String, nullable=True)
-    faculty = Column(String, nullable=True)
-    year_of_study = Column(Integer, default=1)
-    enrollment_date = Column(String)
-    graduation_date = Column(String)
+    admission_number = Column(String, unique=True, index=True, nullable=False)
+    full_name = Column(String, nullable=False)
+    programme = Column(String, nullable=True)
+    department = Column(String, nullable=True)
+    school = Column(String, nullable=True)
+    registration_year = Column(Integer, nullable=True)
+    status = Column(String, default="ACTIVE")
+    gender = Column(String, nullable=True)
+    date_of_birth = Column(String, nullable=True)
     national_id = Column(String, unique=True, nullable=True)
-    passport_number = Column(String, unique=True, nullable=True)
-    emergency_contact_name = Column(String, nullable=True)
-    emergency_contact_phone = Column(String, nullable=True)
-    is_alumni = Column(Boolean, default=False)
+    email = Column(String, nullable=True)
+    phone = Column(String, nullable=True)
+    address = Column(Text, nullable=True)
+    guardian_name = Column(String, nullable=True)
+    guardian_phone = Column(String, nullable=True)
+    photo_path = Column(String, nullable=True)
+    notes = Column(Text, nullable=True)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     deleted_at = Column(DateTime(timezone=True), nullable=True)
 
-    # Relationships - with string foreign_keys using Class.Column notation
-    user = relationship("User", back_populates="students", foreign_keys="[Student.user_id]")
+    # Relationships
+    user = relationship("User", back_populates="students", foreign_keys="[Student.created_by]")
     clearance_request = relationship("ClearanceRequest", back_populates="student", uselist=False, foreign_keys="[ClearanceRequest.student_id]")
     registry_inventory = relationship("RegistryInventory", back_populates="student", foreign_keys="[RegistryInventory.student_id]")
     collections = relationship("CertificateCollection", back_populates="student", foreign_keys="[CertificateCollection.student_id]")
@@ -291,12 +289,13 @@ class Student(Base):
     notifications = relationship("Notification", back_populates="student", foreign_keys="[Notification.student_id]")
 
     __table_args__ = (
-        Index('ix_students_program', 'program'),
-        Index('ix_students_year_of_study', 'year_of_study'),
-        CheckConstraint('year_of_study >= 1', name='check_year_of_study'),
+        Index('idx_students_admission', 'admission_number'),
+        Index('idx_students_name', 'full_name'),
+        Index('idx_students_programme', 'programme'),
+        Index('idx_students_status', 'status'),
     )
 
-
+# ============= CLEARANCE MODELS =============
 # ============= CLEARANCE MODELS =============
 
 class ClearanceRequest(Base):
@@ -438,6 +437,7 @@ class RegistryInventory(Base):
     storage_location = Column(String)
     storage_location_id = Column(Integer, ForeignKey("storage_locations.id"), nullable=True)
     status = Column(Enum(CertificateStatus), default=CertificateStatus.AWAITING_CLEARANCE)
+    certificate_type = Column(String, default="Diploma")  # Diploma, Craft, Transcript, Testimonial  # <-- ADDED
     date_received = Column(DateTime(timezone=True), server_default=func.now())
     marked_available_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     marked_available_at = Column(DateTime(timezone=True))
