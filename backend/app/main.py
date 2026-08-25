@@ -1,7 +1,9 @@
 from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from .routes import student_records_routes
 from .routes import id_routes
+from .routes import student_records_routes
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 import os
@@ -197,11 +199,13 @@ app.include_router(id_routes.router)
 app.include_router(auth_routes.router)
 app.include_router(monitoring_routes.router)
 app.include_router(student_routes.router)
+app.include_router(student_records_routes.router)
 app.include_router(clearance_routes.router)
 app.include_router(certificate_routes.router)
 app.include_router(user_routes.router)
 app.include_router(audit_routes.router)
 app.include_router(ip_routes.router)
+app.include_router(student_records_routes.router)
 app.include_router(report_routes.router)  # <-- ADDED
 
 # ============================================

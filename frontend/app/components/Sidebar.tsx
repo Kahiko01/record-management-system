@@ -85,6 +85,7 @@ export default function Sidebar() {
     {
       title: "ADMINISTRATION",
       items: [
+        { name: "Student Records", href: "/admin/students", icon: Users, tasks: ["user:view", "user:create", "search:students"] },
         { name: "Users & Roles", href: "/admin/users", icon: UserCog, tasks: ["user:assign_role", "admin:manage_roles", "admin:manage_users", "user:view"] },
         // ID Management Dropdown - Replaced single link with collapsible block
         {
@@ -258,6 +259,17 @@ export default function Sidebar() {
                               }`}
                             >
                               Audit Logs
+                            </Link>
+                            <Link
+                              href="/dean/id-management/reports"
+                              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                                pathname === '/dean/id-management/reports'
+                                  ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20'
+                                  : 'text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-slate-800'
+                              }`}
+                            >
+                              <BarChart3 className="w-4 h-4" />
+                              <span>Reports</span>
                             </Link>
                           </div>
                         )}

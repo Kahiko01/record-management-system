@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
+from sqlalchemy import func, or_
 from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel
@@ -7,7 +8,7 @@ from typing import Optional
 from ..core.database import get_db
 from ..models.id_models import IDBatch, IDCard, IDIssuance, IDCollection, IDReplacement
 from ..auth.auth import get_current_active_user
-from ..models.models import User
+from ..models.models import User, Student
 
 router = APIRouter(prefix="/id-management", tags=["ID Management"])
 
@@ -85,19 +86,19 @@ async def receive_id_batch(
     quantity = data.get("quantity")
     supplier = data.get("supplier")
     notes = data.get("notes")
-    
+
     # Validation
     if not batch_number or not quantity:
         raise HTTPException(status_code=400, detail="Batch number and quantity are required")
-    
+
     if quantity < 1 or quantity > 10000:
         raise HTTPException(status_code=400, detail="Quantity must be between 1 and 10,000")
-    
+
     # Check if batch number already exists
     existing = db.query(IDBatch).filter(IDBatch.batch_number == batch_number).first()
     if existing:
         raise HTTPException(status_code=400, detail="Batch number already exists")
-    
+
     # 1. Create the batch record
     batch = IDBatch(
         batch_number=batch_number,
@@ -108,13 +109,13 @@ async def receive_id_batch(
     )
     db.add(batch)
     db.flush()  # Get the batch.id
-    
+
     # 2. Auto-generate individual cards
     cards_created = []
     for i in range(quantity):
         card_number = f"{batch_number}-{i+1:04d}"
         serial_number = f"SN{batch_number.replace('-', '')}{i+1:04d}"
-        
+
         card = IDCard(
             card_number=card_number,
             serial_number=serial_number,
@@ -123,9 +124,9 @@ async def receive_id_batch(
         )
         db.add(card)
         cards_created.append(card_number)
-    
+
     db.commit()
-    
+
     return {
         "message": f"Batch {batch_number} received successfully",
         "batch_id": batch.id,
@@ -178,6 +179,115 @@ async def get_id_card(
     if not card:
         raise HTTPException(status_code=404, detail="ID card not found")
     return card
+
+# ============= STUDENT-LINKED CARD SEARCHES =============
+
+@router.get("/cards/pending-collection")
+async def get_pending_collection_cards(
+    search: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Find cards with status=ASSIGNED (ready for physical collection)"""
+    query = db.query(IDCard, Student).join(
+        Student, IDCard.assigned_to_student_id == Student.id
+    ).filter(IDCard.status == "ASSIGNED", Student.deleted_at == None)
+    
+    if search:
+        search_term = f"%{search}%"
+        query = query.filter(
+            or_(
+                Student.student_id.ilike(search_term),
+                Student.first_name.ilike(search_term),
+                Student.last_name.ilike(search_term)
+            )
+        )
+    
+    results = query.order_by(IDCard.issued_date.desc()).all()
+    return [
+        {
+            "card_id": card.id,
+            "card_number": card.card_number,
+            "serial_number": card.serial_number,
+            "student_id": student.id,
+            "admission_number": student.student_id,
+            "full_name": f"{student.first_name} {student.middle_name or ''} {student.last_name}".strip(),
+            "programme": student.program,
+            "department": student.faculty,
+            "issued_date": card.issued_date.isoformat() if card.issued_date else None
+        }
+        for card, student in results
+    ]
+
+@router.get("/cards/issued")
+async def get_issued_cards(
+    search: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Find cards with status=ISSUED (for lost/damaged reporting)"""
+    query = db.query(IDCard, Student).join(
+        Student, IDCard.assigned_to_student_id == Student.id
+    ).filter(IDCard.status == "ISSUED", Student.deleted_at == None)
+    
+    if search:
+        search_term = f"%{search}%"
+        query = query.filter(
+            or_(
+                Student.student_id.ilike(search_term),
+                Student.first_name.ilike(search_term),
+                Student.last_name.ilike(search_term)
+            )
+        )
+    
+    results = query.order_by(IDCard.collection_date.desc()).all()
+    return [
+        {
+            "card_id": card.id,
+            "card_number": card.card_number,
+            "serial_number": card.serial_number,
+            "student_id": student.id,
+            "admission_number": student.student_id,
+            "full_name": f"{student.first_name} {student.middle_name or ''} {student.last_name}".strip(),
+            "programme": student.program,
+            "department": student.faculty,
+            "collection_date": card.collection_date.isoformat() if card.collection_date else None
+        }
+        for card, student in results
+    ]
+
+@router.get("/students/search")
+async def search_students_for_id(
+    search: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Quick student search for ID issuance"""
+    if not search or len(search) < 2:
+        return []
+    
+    search_term = f"%{search}%"
+    students = db.query(Student).filter(
+        Student.deleted_at == None,
+        or_(
+            Student.student_id.ilike(search_term),
+            Student.first_name.ilike(search_term),
+            Student.last_name.ilike(search_term)
+        )
+    ).limit(10).all()
+    
+    return [
+        {
+            "id": s.id,
+            "admission_number": s.student_id,
+            "full_name": f"{s.first_name} {s.middle_name or ''} {s.last_name}".strip(),
+            "programme": s.program,
+            "department": s.faculty,
+            "year_of_study": s.year_of_study,
+            "status": "GRADUATED" if s.is_alumni else "ACTIVE"
+        }
+        for s in students
+    ]
 
 # ============= ID ISSUANCE =============
 
@@ -412,3 +522,209 @@ async def get_id_audit_logs(
     all_logs.sort(key=lambda x: x["timestamp"], reverse=True)
 
     return all_logs
+
+# ============= REPORTS =============
+
+from sqlalchemy import func
+from datetime import datetime, timedelta
+
+@router.get("/reports/inventory-summary")
+async def get_inventory_summary_report(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Comprehensive inventory summary report"""
+    # Count by status
+    status_counts = db.query(IDCard.status, func.count(IDCard.id)).group_by(IDCard.status).all()
+    status_dict = {status: count for status, count in status_counts}
+
+    # Total cards
+    total = db.query(IDCard).count()
+
+    # Batches received
+    batch_count = db.query(IDBatch).count()
+    total_received = db.query(func.sum(IDBatch.quantity_received)).scalar() or 0
+
+    # Reconciliation check
+    in_stock = status_dict.get("IN_STOCK", 0)
+    assigned = status_dict.get("ASSIGNED", 0)
+    issued = status_dict.get("ISSUED", 0)
+    lost = status_dict.get("LOST", 0)
+    damaged = status_dict.get("DAMAGED", 0)
+    cancelled = status_dict.get("CANCELLED", 0)
+    returned = status_dict.get("RETURNED", 0)
+
+    accounted = in_stock + assigned + issued + lost + damaged + cancelled + returned
+    discrepancy = total_received - accounted if total_received else 0
+
+    return {
+        "total_cards": total,
+        "total_received": total_received,
+        "batch_count": batch_count,
+        "by_status": {
+            "IN_STOCK": in_stock,
+            "ASSIGNED": assigned,
+            "ISSUED": issued,
+            "LOST": lost,
+            "DAMAGED": damaged,
+            "CANCELLED": cancelled,
+            "RETURNED": returned,
+        },
+        "accounted": accounted,
+        "discrepancy": discrepancy,
+        "reconciled": discrepancy == 0
+    }
+
+@router.get("/reports/issuances")
+async def get_issuance_report(
+    start_date: str = None,
+    end_date: str = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Issuance report with optional date filtering"""
+    query = db.query(IDIssuance)
+
+    if start_date:
+        try:
+            query = query.filter(IDIssuance.created_at >= datetime.fromisoformat(start_date))
+        except: pass
+    if end_date:
+        try:
+            query = query.filter(IDIssuance.created_at <= datetime.fromisoformat(end_date))
+        except: pass
+
+    issuances = query.order_by(IDIssuance.created_at.desc()).all()
+
+    return [
+        {
+            "id": i.id,
+            "timestamp": i.created_at.isoformat(),
+            "card_number": i.card.card_number if i.card else "Unknown",
+            "serial_number": i.card.serial_number if i.card else "Unknown",
+            "student_id": i.student_id,
+            "student_name": i.student_name,
+            "programme": i.student_programme,
+            "department": i.student_department,
+            "issued_by": i.issuing_officer_id,
+            "ip_address": i.ip_address,
+            "notes": i.notes
+        }
+        for i in issuances
+    ]
+
+@router.get("/reports/collections")
+async def get_collection_report(
+    start_date: str = None,
+    end_date: str = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Collection report with optional date filtering"""
+    query = db.query(IDCollection)
+
+    if start_date:
+        try:
+            query = query.filter(IDCollection.created_at >= datetime.fromisoformat(start_date))
+        except: pass
+    if end_date:
+        try:
+            query = query.filter(IDCollection.created_at <= datetime.fromisoformat(end_date))
+        except: pass
+
+    collections = query.order_by(IDCollection.created_at.desc()).all()
+
+    return [
+        {
+            "id": c.id,
+            "timestamp": c.created_at.isoformat(),
+            "card_number": c.card.card_number if c.card else "Unknown",
+            "student_id": c.student_id,
+            "collected_by": c.collected_by,
+            "signature_acknowledged": c.signature_acknowledged,
+            "notes": c.notes
+        }
+        for c in collections
+    ]
+
+@router.get("/reports/lost-damaged")
+async def get_lost_damaged_report(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Report of all lost and damaged cards"""
+    lost = db.query(IDCard).filter(IDCard.status == "LOST").all()
+    damaged = db.query(IDCard).filter(IDCard.status == "DAMAGED").all()
+
+    return {
+        "lost": [
+            {
+                "id": c.id,
+                "card_number": c.card_number,
+                "serial_number": c.serial_number,
+                "student_id": c.assigned_to_student_id,
+                "reported_date": c.lost_report_date.isoformat() if c.lost_report_date else None,
+                "reason": c.lost_report_reason
+            }
+            for c in lost
+        ],
+        "damaged": [
+            {
+                "id": c.id,
+                "card_number": c.card_number,
+                "serial_number": c.serial_number,
+                "student_id": c.assigned_to_student_id,
+                "reported_date": c.damaged_report_date.isoformat() if c.damaged_report_date else None,
+                "reason": c.damaged_report_reason
+            }
+            for c in damaged
+        ],
+        "total_lost": len(lost),
+        "total_damaged": len(damaged)
+    }
+
+@router.get("/reports/batches")
+async def get_batches_report(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Report of all received batches"""
+    batches = db.query(IDBatch).order_by(IDBatch.date_received.desc()).all()
+
+    result = []
+    for b in batches:
+        card_count = db.query(IDCard).filter(IDCard.batch_id == b.id).count()
+        result.append({
+            "id": b.id,
+            "batch_number": b.batch_number,
+            "supplier": b.supplier,
+            "quantity_received": b.quantity_received,
+            "cards_generated": card_count,
+            "date_received": b.date_received.isoformat() if b.date_received else None,
+            "received_by": b.received_by,
+            "notes": b.notes
+        })
+
+    return result
+
+@router.get("/reports/replacements")
+async def get_replacements_report(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Report of all card replacements"""
+    replacements = db.query(IDReplacement).order_by(IDReplacement.created_at.desc()).all()
+
+    return [
+        {
+            "id": r.id,
+            "timestamp": r.created_at.isoformat(),
+            "old_card": r.old_card.card_number if r.old_card else "Unknown",
+            "new_card": r.new_card.card_number if r.new_card else "Unknown",
+            "reason": r.reason,
+            "fee_paid": r.fee_paid,
+            "requested_by": r.requested_by,
+            "notes": r.notes
+        }
+        for r in replacements
+    ]
