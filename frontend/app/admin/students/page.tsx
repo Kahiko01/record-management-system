@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Eye, FileCheck, Edit, X, User, GraduationCap, DollarSign, CheckCircle, XCircle, Upload, Plus, Filter } from "lucide-react";
+import { Search, Eye, FileCheck, Edit, X, GraduationCap, DollarSign, CheckCircle, XCircle, Upload, Plus, Filter, Download } from "lucide-react";
 
 export default function StudentsPage() {
   const router = useRouter();
@@ -80,14 +80,31 @@ export default function StudentsPage() {
     } catch (err) { console.error("Programmes fetch failed:", err); }
   };
 
+  const downloadStudentsCSV = () => {
+    if (students.length === 0) {
+      alert("No students available to export!");
+      return;
+    }
+    const headers = ["admission_number", "full_name", "programme", "department", "registration_year", "email", "phone", "national_id", "total_fee", "paid_fee", "status"];
+    const csvRows = students.map((s: any) => 
+      headers.map(h => `"${(s[h] !== undefined && s[h] !== null ? s[h] : '').toString().replace(/"/g, '""')}"`).join(",")
+    );
+    const csvContent = [headers.join(","), ...csvRows].join("\n");
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `students_master_list_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleViewStudent = (student: any) => {
     const totalFee = student.total_fee || 150000;
     const paidFee = student.paid_fee || 0;
-    setSelectedStudent({
-      ...student,
-      fee: { total: totalFee, paid: paidFee, balance: totalFee - paidFee },
-      clearance: { finance: paidFee >= totalFee, exam: true, dean: true, library: true, accommodation: true, discipline: true }
-    });
+    setSelectedStudent({ ...student, fee: { total: totalFee, paid: paidFee, balance: totalFee - paidFee } });
   };
 
   const handleEditStudent = (student: any) => {
@@ -114,78 +131,26 @@ export default function StudentsPage() {
     try {
       const url = isEditing ? `http://127.0.0.1:8000/students/modify-record/${editingId}` : "http://127.0.0.1:8000/students";
       const method = isEditing ? "PUT" : "POST";
-      
-      const payload = {
-        ...newStudent,
-        total_fee: parseFloat(String(newStudent.total_fee)) || 0,
-        paid_fee: parseFloat(String(newStudent.paid_fee)) || 0
-      };
-
-      const res = await fetch(url, {
-        method,
-        headers: { 
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(payload)
-      });
-      
-      if (res.ok) {
-        alert(`✅ Student ${isEditing ? "updated" : "added"} successfully!`);
-        closeModal();
-        fetchStudents();
-        fetchStats();
-      } else {
-        const err = await res.json();
-        alert(`❌ Failed: ${err.detail || "Unknown error"}`);
-      }
+      const payload = { ...newStudent, total_fee: parseFloat(String(newStudent.total_fee)) || 0, paid_fee: parseFloat(String(newStudent.paid_fee)) || 0 };
+      const res = await fetch(url, { method, headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      if (res.ok) { alert(`✅ Student ${isEditing ? "updated" : "added"} successfully!`); closeModal(); fetchStudents(); fetchStats(); } 
+      else { const err = await res.json(); alert(`❌ Failed: ${err.detail || "Unknown error"}`); }
     } catch (err) { alert("Network error"); }
     finally { setSaving(false); }
   };
 
-  const closeModal = () => {
-    setIsAddModalOpen(false);
-    setIsEditing(false);
-    setEditingId(null);
-    setNewStudent({ admission_number: "", full_name: "", programme: "", department: "", registration_year: 1, email: "", phone: "", national_id: "", total_fee: "", paid_fee: "" });
-  };
+  const closeModal = () => { setIsAddModalOpen(false); setIsEditing(false); setEditingId(null); setNewStudent({ admission_number: "", full_name: "", programme: "", department: "", registration_year: 1, email: "", phone: "", national_id: "", total_fee: "", paid_fee: "" }); };
+  const clearFilters = () => { setStatusFilter(""); setProgrammeFilter(""); setSearch(""); };
 
-  const clearFilters = () => {
-    setStatusFilter("");
-    setProgrammeFilter("");
-    setSearch("");
-  };
-
-  const openDeactivateModal = (student: any) => {
-    setStudentToDeactivate(student);
-    setDeactivateChecks({ library: false, finance: false, id_surrendered: false });
-    setDeactivateReason("Withdrawn");
-    setIsDeactivateModalOpen(true);
-  };
+  const openDeactivateModal = (student: any) => { setStudentToDeactivate(student); setDeactivateChecks({ library: false, finance: false, id_surrendered: false }); setDeactivateReason("Withdrawn"); setIsDeactivateModalOpen(true); };
 
   const confirmDeactivation = async () => {
-    if (!deactivateChecks.library || !deactivateChecks.finance) {
-      alert("⚠️ Please confirm that Library and Finance clearances are completed before deactivating.");
-      return;
-    }
+    if (!deactivateChecks.library || !deactivateChecks.finance) { alert("⚠️ Please confirm Library and Finance clearances."); return; }
     try {
-      const res = await fetch(`http://127.0.0.1:8000/students/${studentToDeactivate.id}/deactivate`, {
-        method: "PUT",
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      if (res.ok) {
-        alert(`✅ ${studentToDeactivate.full_name || studentToDeactivate.name} has been deactivated.`);
-        setIsDeactivateModalOpen(false);
-        setStudentToDeactivate(null);
-        fetchStudents();
-        fetchStats();
-      } else {
-        const err = await res.json();
-        alert(`❌ Failed: ${err.detail}`);
-      }
-    } catch (err) {
-      alert("Network error");
-    }
+      const res = await fetch(`http://127.0.0.1:8000/students/${studentToDeactivate.id}/deactivate`, { method: "PUT", headers: { "Authorization": `Bearer ${token}` } });
+      if (res.ok) { alert(`✅ ${studentToDeactivate.full_name} deactivated.`); setIsDeactivateModalOpen(false); fetchStudents(); fetchStats(); } 
+      else { const err = await res.json(); alert(`❌ Failed: ${err.detail}`); }
+    } catch (err) { alert("Network error"); }
   };
 
   return (
@@ -196,6 +161,9 @@ export default function StudentsPage() {
           <p className="text-gray-500 dark:text-gray-400 mt-1">View, search, and manage student records</p>
         </div>
         <div className="flex gap-3">
+          <button onClick={downloadStudentsCSV} className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition flex items-center gap-2 shadow-sm font-medium">
+            <Download className="w-4 h-4" /> Export CSV
+          </button>
           <button onClick={() => router.push("/admin/students/upload")} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition flex items-center gap-2 shadow-sm font-medium">
             <Upload className="w-4 h-4" /> Bulk Upload
           </button>
@@ -206,19 +174,19 @@ export default function StudentsPage() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div onClick={clearFilters} className={`bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 cursor-pointer transition hover:shadow-md hover:border-blue-500 ${statusFilter === "" ? "ring-2 ring-blue-500" : ""}`}>
+        <div onClick={clearFilters} className={`bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 cursor-pointer transition ${statusFilter === "" ? "ring-2 ring-blue-500" : ""}`}>
           <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2"><Filter className="w-4 h-4" /> Total Students</p>
           <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">{stats.total}</p>
         </div>
-        <div onClick={() => setStatusFilter(statusFilter === "ACTIVE" ? "" : "ACTIVE")} className={`bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 cursor-pointer transition hover:shadow-md hover:border-blue-500 ${statusFilter === "ACTIVE" ? "ring-2 ring-blue-500" : ""}`}>
+        <div onClick={() => setStatusFilter(statusFilter === "ACTIVE" ? "" : "ACTIVE")} className={`bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 cursor-pointer transition ${statusFilter === "ACTIVE" ? "ring-2 ring-blue-500" : ""}`}>
           <p className="text-sm text-gray-500 dark:text-gray-400">Active</p>
           <p className="text-3xl font-bold text-blue-600 mt-2">{stats.active}</p>
         </div>
-        <div onClick={() => setStatusFilter(statusFilter === "GRADUATED" ? "" : "GRADUATED")} className={`bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 cursor-pointer transition hover:shadow-md hover:border-green-500 ${statusFilter === "GRADUATED" ? "ring-2 ring-green-500" : ""}`}>
+        <div onClick={() => setStatusFilter(statusFilter === "GRADUATED" ? "" : "GRADUATED")} className={`bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 cursor-pointer transition ${statusFilter === "GRADUATED" ? "ring-2 ring-green-500" : ""}`}>
           <p className="text-sm text-gray-500 dark:text-gray-400">Graduated</p>
           <p className="text-3xl font-bold text-green-600 mt-2">{stats.graduated}</p>
         </div>
-        <div onClick={() => setStatusFilter(statusFilter === "SUSPENDED" ? "" : "SUSPENDED")} className={`bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 cursor-pointer transition hover:shadow-md hover:border-red-500 ${statusFilter === "SUSPENDED" ? "ring-2 ring-red-500" : ""}`}>
+        <div onClick={() => setStatusFilter(statusFilter === "SUSPENDED" ? "" : "SUSPENDED")} className={`bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 cursor-pointer transition ${statusFilter === "SUSPENDED" ? "ring-2 ring-red-500" : ""}`}>
           <p className="text-sm text-gray-500 dark:text-gray-400">Suspended</p>
           <p className="text-3xl font-bold text-red-600 mt-2">{stats.suspended}</p>
         </div>
@@ -388,15 +356,10 @@ export default function StudentsPage() {
                 {studentToDeactivate.full_name || studentToDeactivate.name} ({studentToDeactivate.admission_number})
               </p>
             </div>
-            
             <div className="p-6 space-y-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Reason for Deactivation</label>
-                <select 
-                  value={deactivateReason} 
-                  onChange={(e) => setDeactivateReason(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                >
+                <select value={deactivateReason} onChange={(e) => setDeactivateReason(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
                   <option value="Withdrawn">Withdrawn</option>
                   <option value="Transferred">Transferred</option>
                   <option value="Expelled">Expelled</option>
@@ -404,53 +367,25 @@ export default function StudentsPage() {
                   <option value="Other">Other</option>
                 </select>
               </div>
-
               <div className="space-y-3 bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg border border-gray-200 dark:border-gray-600">
                 <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Pre-Deactivation Checklist</p>
-                
                 <label className="flex items-start gap-3 cursor-pointer">
-                  <input 
-                    type="checkbox" 
-                    checked={deactivateChecks.library} 
-                    onChange={(e) => setDeactivateChecks({...deactivateChecks, library: e.target.checked})}
-                    className="mt-1 w-4 h-4 text-yellow-600 rounded border-gray-300 focus:ring-yellow-500" 
-                  />
+                  <input type="checkbox" checked={deactivateChecks.library} onChange={(e) => setDeactivateChecks({...deactivateChecks, library: e.target.checked})} className="mt-1 w-4 h-4 text-yellow-600 rounded border-gray-300 focus:ring-yellow-500" />
                   <span className="text-sm text-gray-700 dark:text-gray-300">Library clearance confirmed (no overdue books)</span>
                 </label>
-
                 <label className="flex items-start gap-3 cursor-pointer">
-                  <input 
-                    type="checkbox" 
-                    checked={deactivateChecks.finance} 
-                    onChange={(e) => setDeactivateChecks({...deactivateChecks, finance: e.target.checked})}
-                    className="mt-1 w-4 h-4 text-yellow-600 rounded border-gray-300 focus:ring-yellow-500" 
-                  />
+                  <input type="checkbox" checked={deactivateChecks.finance} onChange={(e) => setDeactivateChecks({...deactivateChecks, finance: e.target.checked})} className="mt-1 w-4 h-4 text-yellow-600 rounded border-gray-300 focus:ring-yellow-500" />
                   <span className="text-sm text-gray-700 dark:text-gray-300">Finance clearance confirmed (fees settled or written off)</span>
                 </label>
-
                 <label className="flex items-start gap-3 cursor-pointer">
-                  <input 
-                    type="checkbox" 
-                    checked={deactivateChecks.id_surrendered} 
-                    onChange={(e) => setDeactivateChecks({...deactivateChecks, id_surrendered: e.target.checked})}
-                    className="mt-1 w-4 h-4 text-yellow-600 rounded border-gray-300 focus:ring-yellow-500" 
-                  />
+                  <input type="checkbox" checked={deactivateChecks.id_surrendered} onChange={(e) => setDeactivateChecks({...deactivateChecks, id_surrendered: e.target.checked})} className="mt-1 w-4 h-4 text-yellow-600 rounded border-gray-300 focus:ring-yellow-500" />
                   <span className="text-sm text-gray-700 dark:text-gray-300">Student ID card surrendered (if applicable)</span>
                 </label>
               </div>
             </div>
-
             <div className="bg-gray-50 dark:bg-gray-700/50 border-t border-gray-200 dark:border-gray-600 p-6 flex justify-end gap-3">
-              <button 
-                onClick={() => setIsDeactivateModalOpen(false)} 
-                className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-medium rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={confirmDeactivation} 
-                className="px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition flex items-center gap-2"
-              >
+              <button onClick={() => setIsDeactivateModalOpen(false)} className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-medium rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition">Cancel</button>
+              <button onClick={confirmDeactivation} className="px-4 py-2 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition flex items-center gap-2">
                 <XCircle className="w-4 h-4" /> Confirm Deactivation
               </button>
             </div>

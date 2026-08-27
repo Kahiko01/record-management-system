@@ -8,7 +8,7 @@ import {
   Archive, Building2, Home, Scale, ShieldCheck, BarChart3, Activity,
   UserCog, Layers, Settings, ChevronLeft, ChevronRight, LogOut,
   UserCheck, CalendarClock, PackageCheck, Clock, ChevronDown, CheckCircle,
-  CreditCard
+  CreditCard, GraduationCap, Upload, FileSpreadsheet
 } from "lucide-react";
 import { useState } from "react";
 import toast from "react-hot-toast";
@@ -52,8 +52,28 @@ export default function Sidebar() {
       title: "OPERATIONS",
       items: [
         { name: "My Tasks", href: "/admin/my-tasks", icon: CheckCircle, tasks: ["task:view", "task:update"] },
-        { name: "Finance", href: "/clearance/finance", icon: DollarSign, tasks: ["finance:view_pending", "finance:view_dashboard"] },
-        { name: "Examination", href: "/clearance/examination", icon: BookOpen, tasks: ["exam:view_pending", "exam:view_dashboard"] },
+        { 
+          name: "Finance", 
+          href: "/clearance/finance", 
+          icon: DollarSign, 
+          tasks: ["finance:view_pending", "finance:view_dashboard"],
+          children: [
+            { name: "Finance Dashboard", href: "/clearance/finance", icon: LayoutDashboard, tasks: ["finance:view_dashboard"] },
+            { name: "Fee Upload", href: "/finance/fee-upload", icon: Upload, tasks: ["finance:upload_fees", "finance:bulk_upload"] },
+            { name: "View Pending", href: "/clearance/finance?filter=pending", icon: Clock, tasks: ["finance:view_pending"] },
+          ]
+        },
+        { 
+          name: "Examination", 
+          href: "/clearance/examination", 
+          icon: BookOpen, 
+          tasks: ["exam:view_pending", "exam:view_dashboard"],
+          children: [
+            { name: "Examination Dashboard", href: "/clearance/examination", icon: LayoutDashboard, tasks: ["exam:view_dashboard"] },
+            { name: "Results Upload", href: "/exams/results-upload", icon: FileSpreadsheet, tasks: ["exam:upload_results", "exam:bulk_upload"] },
+            { name: "View Pending", href: "/clearance/examination?filter=pending", icon: Clock, tasks: ["exam:view_pending"] },
+          ]
+        },
         {
           name: "Registry",
           href: "/dashboard/registry",
@@ -88,7 +108,7 @@ export default function Sidebar() {
         { name: "Cohort Management", href: "/registry/cohort", icon: CheckCircle, tasks: ["registry:manage_cohort", "finance:update_cohort_fees", "exam:update_cohort_status", "accommodation:update_cohort_status"] },
         { name: "Student Records", href: "/admin/students", icon: Users, tasks: ["user:view", "user:create", "search:students", "registry:view_inventory"] },
         { name: "Users & Roles", href: "/admin/users", icon: UserCog, tasks: ["user:assign_role", "admin:manage_roles", "admin:manage_users", "user:view"] },
-        // ID Management Dropdown - Replaced single link with collapsible block
+        // ID Management Dropdown
         {
           name: "ID Management",
           href: "/dean/id-management",

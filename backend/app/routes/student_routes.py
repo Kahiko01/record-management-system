@@ -27,6 +27,10 @@ async def get_students(
 ):
     """Get all students with optional search and pagination"""
     query = db.query(Student)
+    
+    # Apply Finance Clearance Filter
+    if finance_cleared:
+        query = query.filter(Student.paid_fee >= Student.total_fee)
     if search:
         query = query.filter(
             (Student.first_name.ilike(f"%{search}%")) |
@@ -738,3 +742,87 @@ def deactivate_student(
         db.rollback()
         print(f"Deactivate error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to deactivate: {str(e)}")
+
+@router.post("/students/merge-upload")
+async def merge_upload_students(
+    file: UploadFile = File(...),
+    update_columns: str = "",  # Comma-separated list of columns to update
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Safe merge upload - only updates specified columns for existing students.
+    update_columns example: "paid_fee,total_fee" or "exam_status,exam_results"
+    """
+    filename = file.filename.lower()
+    if not (filename.endswith('.csv') or filename.endswith('.xlsx')):
+        raise HTTPException(status_code=400, detail="Only .csv and .xlsx files allowed")
+    
+    # Parse which columns this department is allowed to update
+    allowed_columns = [col.strip() for col in update_columns.split(',') if col.strip()]
+    if not allowed_columns:
+        raise HTTPException(status_code=400, detail="No update columns specified")
+    
+    contents = await file.read()
+    errors = []
+    success_count = 0
+    error_count = 0
+    
+    try:
+        import pandas as pd
+        import io
+        if filename.endswith('.csv'):
+            df = pd.read_csv(io.BytesIO(contents))
+        else:
+            df = pd.read_excel(io.BytesIO(contents))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to parse file: {str(e)}")
+
+    # Check if admission_number column exists (needed to match students)
+    if 'admission_number' not in df.columns:
+        raise HTTPException(status_code=400, detail="File must contain 'admission_number' column")
+
+    for index, row in df.iterrows():
+        row_num = index + 2
+        try:
+            admission = str(row['admission_number']).strip()
+            
+            # Find the student
+            student = db.query(Student).filter(Student.admission_number == admission).first()
+            if not student:
+                errors.append(f"Row {row_num}: Student '{admission}' not found")
+                error_count += 1
+                continue
+
+            # Only update the allowed columns
+            updated = False
+            for col in allowed_columns:
+                if col in df.columns and col in ['total_fee', 'paid_fee', 'status', 'programme', 'department', 'exams_status']:
+                    value = row.get(col)
+                    if pd.notna(value):
+                        if col in ['total_fee', 'paid_fee']:
+                            setattr(student, col, float(value) or 0)
+                        elif col == 'exams_status':
+                            setattr(student, 'status', str(value).strip())
+                        else:
+                            setattr(student, col, str(value).strip())
+                        updated = True
+            
+            if updated:
+                db.add(student)
+                success_count += 1
+            else:
+                errors.append(f"Row {row_num}: No valid data to update for '{admission}'")
+                error_count += 1
+                
+        except Exception as e:
+            errors.append(f"Row {row_num}: {str(e)}")
+            error_count += 1
+            
+    db.commit()
+    
+    return {
+        "success_count": success_count,
+        "error_count": error_count,
+        "errors": errors[:20]
+    }
