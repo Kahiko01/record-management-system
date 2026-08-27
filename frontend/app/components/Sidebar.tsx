@@ -8,7 +8,7 @@ import {
   Archive, Building2, Home, Scale, ShieldCheck, BarChart3, Activity,
   UserCog, Layers, Settings, ChevronLeft, ChevronRight, LogOut,
   UserCheck, CalendarClock, PackageCheck, Clock, ChevronDown, CheckCircle,
-  CreditCard, GraduationCap, Upload, FileSpreadsheet
+  CreditCard, GraduationCap, Upload, FileSpreadsheet, BedDouble
 } from "lucide-react";
 import { useState } from "react";
 import toast from "react-hot-toast";
@@ -90,7 +90,12 @@ export default function Sidebar() {
           ]
         },
         { name: "Dean", href: "/clearance/dean", icon: Building2, tasks: ["dean:view_pending", "dean:view_dashboard"] },
-        { name: "Accommodation", href: "#", icon: Home, tasks: [], disabled: true },
+        { 
+          name: "Accommodation", 
+          href: "/clearance/accommodation", 
+          icon: BedDouble, 
+          tasks: ["accommodation:view_pending", "accommodation:view_dashboard", "accommodation:manage_allocations"] 
+        },
         { name: "Discipline", href: "#", icon: Scale, tasks: [], disabled: true },
       ]
     },
