@@ -1,8 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import TopBar from "../../components/TopBar";
-import Sidebar from "../../components/Sidebar";
 import { useAuth } from "../../context/AuthContext";
 import { auditApi } from "../../lib/api";
 import { AuditLog } from "../../types";
@@ -84,9 +82,7 @@ export default function AdminAuditPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-950 text-gray-900 dark:text-slate-200">
-      <TopBar />
       <div className="flex">
-        <Sidebar />
         <div className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8 gap-4">
             <div>

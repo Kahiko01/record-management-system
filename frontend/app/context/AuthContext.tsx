@@ -118,7 +118,14 @@ export enum Permission {
   ADMIN_CONFIGURE_SYSTEM = "admin:configure_system",
   ADMIN_MANAGE_INVENTORY = "admin:manage_inventory",
   ADMIN_ACTIVATE_ACCOUNTS = "admin:activate_accounts",
+  REGISTRY_MANAGE_COHORT = "registry:manage_cohort",
+  // Cohort Management Permissions
+  REGISTRY_MANAGE_COHORT = "registry:manage_cohort",
+  FINANCE_UPDATE_COHORT_FEES = "finance:update_cohort_fees",
+  EXAM_UPDATE_COHORT_STATUS = "exam:update_cohort_status",
+  ACCOMMODATION_UPDATE_COHORT_STATUS = "accommodation:update_cohort_status",
   ADMIN_RESET_PASSWORDS = "admin:reset_passwords",
+  REGISTRY_MANAGE_COHORT = "registry:manage_cohort",
 }
 
 const ROLE_PERMISSIONS: Record<string, Permission[]> = {
@@ -216,6 +223,8 @@ export const ROLE_MENUS: Record<string, MenuItem[]> = {
   registry_officer: [
     { title: "Registry Dashboard", icon: "📊", path: "/dashboard", permissions: [Permission.DASHBOARD_VIEW_REGISTRY] },
     { title: "Registry Office", icon: "🏛", path: "/registry", permissions: [Permission.REGISTRY_VIEW_INVENTORY] },
+    { title: "Cohort Management", icon: "🎓", path: "/registry/cohort", permissions: [Permission.REGISTRY_MANAGE_COHORT] },
+    { title: "Cohort Management", icon: "🎓", path: "/registry/cohort", permissions: [Permission.REGISTRY_MANAGE_COHORT] },
     { title: "Fee Balances", icon: "💰", path: "/finance/balances", permissions: [Permission.REGISTRY_VIEW_INVENTORY] },
     { title: "Collections Report", icon: "📑", path: "/registry/collections", permissions: [Permission.REGISTRY_VIEW_REPORTS] },
     { title: "Inventory Records", icon: "📦", path: "/storage", permissions: [Permission.STORAGE_VIEW] },
@@ -228,15 +237,23 @@ export const ROLE_MENUS: Record<string, MenuItem[]> = {
     { title: "Export Hub", icon: "", path: "/audit/reports", permissions: [Permission.AUDITOR_EXPORT_REPORTS] },
     { title: "Inventory Records", icon: "📦", path: "/storage", permissions: [Permission.STORAGE_VIEW] },
   ],
+  "super admin": [
+    { title: "Cohort Management", icon: "🎓", path: "/registry/cohort", permissions: [Permission.REGISTRY_MANAGE_COHORT] },
+  ],
   super_admin: [
+    { title: "Cohort Management", icon: "🎓", path: "/registry/cohort", permissions: [Permission.REGISTRY_MANAGE_COHORT] },
+    { title: "Cohort Management", icon: "🎓", path: "/registry/cohort", permissions: [Permission.REGISTRY_MANAGE_COHORT] },
     { title: "Admin Dashboard", icon: "📊", path: "/dashboard", permissions: [Permission.DASHBOARD_VIEW_ADMIN] },
     { title: "Finance Clearance", icon: "💰", path: "/clearance/finance", permissions: [Permission.FINANCE_VIEW_PENDING] },
     { title: "Exam Clearance", icon: "📝", path: "/clearance/examination", permissions: [Permission.EXAM_VIEW_PENDING] },
     { title: "Dean Reviews", icon: "🎓", path: "/clearance/dean", permissions: [Permission.DEAN_VIEW_PENDING] },
     { title: "Registry Office", icon: "🏛", path: "/registry", permissions: [Permission.REGISTRY_VIEW_INVENTORY] },
+    { title: "Cohort Management", icon: "🎓", path: "/registry/cohort", permissions: [Permission.REGISTRY_MANAGE_COHORT] },
+    { title: "Cohort Management", icon: "🎓", path: "/registry/cohort", permissions: [Permission.REGISTRY_MANAGE_COHORT] },
     { title: "Fee Balances", icon: "💰", path: "/finance/balances", permissions: [Permission.ADMIN_VIEW_ALL_REPORTS] },
     { title: "Payment Upload", icon: "💳", path: "/finance/payments", permissions: [Permission.ADMIN_VIEW_ALL_REPORTS] },
     { title: "Student Management", icon: "🎓", path: "/admin/students", permissions: [Permission.USER_CREATE] },
+    { title: "Bulk Upload Students", icon: "📤", path: "/admin/students/upload", permissions: [Permission.USER_CREATE] },
     { title: "Manage Users", icon: "👤", path: "/admin/users", permissions: [Permission.USER_VIEW] },
     { title: "Audit Logs", icon: "🔍", path: "/admin/audit", permissions: [Permission.ADMIN_VIEW_ALL_LOGS] },
     { title: "Export Hub", icon: "", path: "/audit/reports", permissions: [Permission.ADMIN_VIEW_ALL_REPORTS] },

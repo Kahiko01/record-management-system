@@ -154,7 +154,7 @@ export default function TopBar() {
       {/* 🔒 Session Timeout Guard */}
       <SessionGuard />
 
-      <header className="h-16 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between px-6 shadow-sm relative z-40">
+      <header className="h-16 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between pl-6 pr-8 shadow-sm relative z-40">
 
         {/* LEFT SIDE: Logo & Command Trigger */}
         <div className="flex items-center gap-4">

@@ -12,7 +12,7 @@ export default function AuditPage() {
     setLoading(true);
     try {
       const token = localStorage.getItem('access_token');
-      const res = await fetch('http://localhost:8000/id-management/audit-logs', { headers: { 'Authorization': `Bearer ${token}` } });
+      const res = await fetch('http://127.0.0.1:8000/id-management/audit-logs', { headers: { 'Authorization': `Bearer ${token}` } });
       setAuditLogs(await res.json());
     } catch (err) { console.error(err); }
     finally { setLoading(false); }

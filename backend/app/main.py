@@ -51,6 +51,8 @@ logger = logging.getLogger(__name__)
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
+
+
     title="School Record Management System",
     description="Complete university record management with clearance workflow",
     version="1.0.0"
@@ -60,39 +62,13 @@ app = FastAPI(
 # MUST be added BEFORE CORS to ensure IP checks happen first
 # Middleware runs in reverse order, so adding it first means it runs last
 # We'll add it last to ensure it runs first on requests
-# app.add_middleware(IPAccessMiddleware)  # <-- Moved to after CORS
-
-# ==================== CORS SETUP ====================
-# CORS setup - supports both localhost and LAN access
-cors_origins = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://0.0.0.0:3000",
-    "http://127.0.0.1:3000",
-    "http://0.0.0.0:3000",
-    "http://localhost:3001",
-    "http://10.163.2.108:3000",
-]
-
-# Also allow any origin from environment variable (comma-separated)
 if os.getenv("CORS_ORIGINS"):
     cors_origins.extend([o.strip() for o in os.getenv("CORS_ORIGINS").split(",")])
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # ==================== IP ACCESS CONTROL MIDDLEWARE ====================
 # ADDED LAST - This ensures it runs FIRST on incoming requests
 # (FastAPI middleware runs in reverse order of addition)
-#app.add_middleware(IPAccessMiddleware)
-
-# ==================== PAYLOAD SIZE PROTECTION ====================
-# Blocks oversized uploads (zip bombs / huge JSON floods) at the door.
 MAX_PAYLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
 
 @app.middleware("http")
@@ -506,3 +482,15 @@ async def startup_event():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+# --- Clean CORS Configuration ---
+
+
+# --- Clean, Bulletproof CORS Configuration ---
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://0.0.0.0:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)

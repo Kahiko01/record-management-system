@@ -3,8 +3,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { clearanceApi } from "../../lib/api";
-import TopBar from "../../components/TopBar";
-import Sidebar from "../../components/Sidebar";
 import AdvancedTable from "../../components/AdvancedTable";
 import { DollarSign, Search, RefreshCw, CheckCircle2, XCircle, Download, Clock } from "lucide-react";
 import toast from "react-hot-toast";
@@ -164,9 +162,7 @@ export default function FinanceClearancePage() {
 
   return (
     <div className="min-h-screen bg-slate-50/60 dark:bg-slate-950 text-slate-800 dark:text-slate-200">
-      <TopBar />
       <div className="flex">
-        <Sidebar />
         
         <main className="flex-1 ml-64 min-h-screen p-6 lg:p-8">
           

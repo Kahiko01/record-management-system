@@ -257,6 +257,10 @@ class User(Base):
 class Student(Base):
     __tablename__ = "students"
 
+    total_fee = Column(Float, default=0.0)
+    paid_fee = Column(Float, default=0.0)
+
+
     id = Column(Integer, primary_key=True, index=True)
     admission_number = Column(String, unique=True, index=True, nullable=False)
     full_name = Column(String, nullable=False)

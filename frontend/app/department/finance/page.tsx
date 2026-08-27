@@ -17,7 +17,7 @@ export default function FinanceDepartment() {
   const fetchPending = async () => {
     try {
       const token = localStorage.getItem('access_token');
-      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/clearance/workflow/department/finance`, {
+      const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'}/clearance/workflow/department/finance`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setStudents(response.data.students || []);
@@ -32,7 +32,7 @@ export default function FinanceDepartment() {
     try {
       const token = localStorage.getItem('access_token');
       await axios.put(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/clearance/finance/${studentId}`,
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'}/clearance/finance/${studentId}`,
         { status: action === "approve" ? "cleared" : "not_cleared", remarks: action === "approve" ? "Cleared by Finance" : "Not cleared by Finance" },
         { headers: { Authorization: `Bearer ${token}` } }
       );

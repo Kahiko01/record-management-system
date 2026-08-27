@@ -19,7 +19,7 @@ export default function ReceiveBatchPage() {
 
     try {
       const token = localStorage.getItem('access_token');
-      const res = await fetch('http://localhost:8000/id-management/batches', {
+      const res = await fetch('http://127.0.0.1:8000/id-management/batches', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

@@ -7,8 +7,6 @@ import {
   Users, CheckCircle, XCircle, Clock,
   Filter, Search, ChevronDown, ChevronUp
 } from "lucide-react";
-import Sidebar from "../../components/Sidebar";
-import TopBar from "../../components/TopBar";
 
 interface StudentWithStatus {
   student_id: number;
@@ -107,9 +105,7 @@ export default function ClearanceDashboard() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 transition-colors">
-      <TopBar />
       <div className="flex">
-        <Sidebar />
         <main className="flex-1 ml-64 p-6 lg:p-8 min-h-screen">
           <div className="max-w-7xl mx-auto">
             <div className="flex items-center justify-between mb-6">

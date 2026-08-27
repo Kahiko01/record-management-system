@@ -2,8 +2,6 @@
 
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import TopBar from "../../../components/TopBar";
-import Sidebar from "../../../components/Sidebar";
 import { Upload, FileText, CheckCircle, XCircle, AlertTriangle, ArrowLeft, Loader2, Download } from "lucide-react";
 import toast from "react-hot-toast";
 import Link from "next/link";
@@ -48,7 +46,7 @@ export default function BulkUploadPage() {
 
     try {
       const token = localStorage.getItem("access_token");
-      const response = await fetch("http://localhost:8000/students/bulk-preview", {
+      const response = await fetch("http://127.0.0.1:8000/students/bulk-preview", {
         method: "POST",
         headers: { "Authorization": `Bearer ${token}` },
         body: formData
@@ -71,7 +69,7 @@ export default function BulkUploadPage() {
       }
 
       setPreviewData(data);
-      setValidStudents(data.preview || []); 
+      setValidStudents(data.all_valid_students || []); 
       toast.success("File analyzed successfully!");
     } catch (error: any) {
       toast.error(`Error: ${error.message}`);
@@ -89,7 +87,7 @@ export default function BulkUploadPage() {
     setLoading(true);
     try {
       const token = localStorage.getItem("access_token");
-      const response = await fetch("http://localhost:8000/students/bulk-import-records", {
+      const response = await fetch("http://127.0.0.1:8000/students/bulk-import-records", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -122,9 +120,7 @@ export default function BulkUploadPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-950 text-gray-900 dark:text-slate-200">
-      <TopBar />
       <div className="flex">
-        <Sidebar />
         <div className="flex-1 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           
           <div className="flex items-center gap-4 mb-8">

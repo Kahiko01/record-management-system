@@ -4,8 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth, Permission } from "../../context/AuthContext";
 
-import TopBar from "../../components/TopBar";
-import Sidebar from "../../components/Sidebar";
 import CollectionQueueTable from "../../components/registry/CollectionQueueTable";
 import VerifyStudentModal from "../../components/registry/VerifyStudentModal";
 import ScheduleCollectionModal from "../../components/registry/ScheduleCollectionModal";
@@ -66,7 +64,7 @@ export default function RegistryDashboardPage() {
   const handleImportStudents = async (data: any[]) => {
     try {
       const token = localStorage.getItem("access_token");
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/students/bulk-import`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/students/bulk-import`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -96,9 +94,7 @@ export default function RegistryDashboardPage() {
 
   return (
     <div className="min-h-screen bg-slate-50/60 dark:bg-slate-950 text-slate-800 dark:text-slate-200 transition-colors">
-      <TopBar />
       <div className="flex">
-        <Sidebar />
         <main className="flex-1 ml-64 p-6 lg:p-8 min-h-screen">
           <div className="mx-auto max-w-7xl space-y-6">
 

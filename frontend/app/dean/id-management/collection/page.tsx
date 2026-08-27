@@ -14,8 +14,8 @@ export default function CollectionPage() {
     try {
       const token = localStorage.getItem('access_token');
       const url = collectionSearch.trim()
-        ? `http://localhost:8000/id-management/cards/pending-collection?search=${encodeURIComponent(collectionSearch)}`
-        : `http://localhost:8000/id-management/cards/pending-collection`;
+        ? `http://127.0.0.1:8000/id-management/cards/pending-collection?search=${encodeURIComponent(collectionSearch)}`
+        : `http://127.0.0.1:8000/id-management/cards/pending-collection`;
       const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
       const data = await res.json();
       setAssignedCards(data);
@@ -35,7 +35,7 @@ export default function CollectionPage() {
     setLoading(true);
     try {
       const token = localStorage.getItem('access_token');
-      const res = await fetch('http://localhost:8000/id-management/collect', {
+      const res = await fetch('http://127.0.0.1:8000/id-management/collect', {
         method: 'POST',
         headers: { 
           'Authorization': `Bearer ${token}`, 

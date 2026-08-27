@@ -4,8 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../context/AuthContext";
 import { reportApi } from "../lib/api";
-import Sidebar from "../components/Sidebar";
-import TopBar from "../components/TopBar";
 import ReportFilterPanel from "../components/ReportFilterPanel";
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
@@ -159,9 +157,7 @@ export default function ReportsPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200">
-      <TopBar />
       <div className="flex">
-        <Sidebar />
         <main className="flex-1 ml-64 p-6 lg:p-8">
           <div className="max-w-7xl mx-auto space-y-6">
 

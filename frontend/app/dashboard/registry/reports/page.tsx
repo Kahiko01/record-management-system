@@ -4,8 +4,6 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth, Permission } from "../../../context/AuthContext";
 
-import TopBar from "../../../components/TopBar";
-import Sidebar from "../../../components/Sidebar";
 import RegistryReports from "../../../components/registry/RegistryReports";
 
 export default function RegistryReportsPage() {
@@ -33,9 +31,7 @@ export default function RegistryReportsPage() {
 
   return (
     <div className="min-h-screen bg-slate-50/60 dark:bg-slate-950 text-slate-800 dark:text-slate-200 transition-colors">
-      <TopBar />
       <div className="flex">
-        <Sidebar />
         <main className="flex-1 ml-64 p-6 lg:p-8 min-h-screen">
           <div className="mx-auto max-w-7xl space-y-6">
             

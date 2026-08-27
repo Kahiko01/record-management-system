@@ -18,7 +18,7 @@ export default function ReplacePage() {
   const fetchCards = async () => {
     try {
       const token = localStorage.getItem('access_token');
-      const res = await fetch('http://localhost:8000/id-management/cards', { 
+      const res = await fetch('http://127.0.0.1:8000/id-management/cards', { 
         headers: { 'Authorization': `Bearer ${token}` } 
       });
       setCards(await res.json());
@@ -30,8 +30,8 @@ export default function ReplacePage() {
     try {
       const token = localStorage.getItem('access_token');
       const url = replaceSearch.trim()
-        ? `http://localhost:8000/id-management/cards/issued?search=${encodeURIComponent(replaceSearch)}`
-        : `http://localhost:8000/id-management/cards/issued`;
+        ? `http://127.0.0.1:8000/id-management/cards/issued?search=${encodeURIComponent(replaceSearch)}`
+        : `http://127.0.0.1:8000/id-management/cards/issued`;
       const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
       const data = await res.json();
       setFoundIssuedCards(data);
@@ -51,7 +51,7 @@ export default function ReplacePage() {
     setLoading(true);
     try {
       const token = localStorage.getItem('access_token');
-      const res = await fetch('http://localhost:8000/id-management/replace', {
+      const res = await fetch('http://127.0.0.1:8000/id-management/replace', {
         method: 'POST',
         headers: { 
           'Authorization': `Bearer ${token}`, 

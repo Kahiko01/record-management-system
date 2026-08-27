@@ -13,8 +13,6 @@ import {
   Settings, HelpCircle, ChevronRight, Eye
 } from "lucide-react";
 import toast from "react-hot-toast";
-import TopBar from "../components/TopBar";
-import Sidebar from "../components/Sidebar";
 
 // ============================================
 // TYPES
@@ -228,9 +226,7 @@ export default function RegistryDashboard() {
 
   return (
     <div className="min-h-screen bg-slate-50/60 dark:bg-slate-950 text-slate-800 dark:text-slate-200 transition-colors">
-      <TopBar />
       <div className="flex">
-        <Sidebar />
         <main className="flex-1 ml-64 p-6 lg:p-8 min-h-screen">
           <div className="mx-auto max-w-7xl space-y-6">
 

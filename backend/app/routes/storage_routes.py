@@ -352,7 +352,7 @@ async def bulk_import_certificates(
                 student = db.query(Student).filter(
                     Student.first_name.ilike(f"%{first_name}%"),
                     Student.last_name.ilike(f"%{last_name}%"),
-                    Student.program.ilike(f"%{item.course}%")
+                    Student.programme.ilike(f"%{item.course}%")
                 ).first()
             
             if not student:

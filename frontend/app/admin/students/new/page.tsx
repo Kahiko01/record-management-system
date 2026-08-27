@@ -2,8 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import TopBar from "../../../components/TopBar";
-import Sidebar from "../../../components/Sidebar";
 import { UserPlus, ArrowLeft, Save, AlertCircle } from "lucide-react";
 import toast from "react-hot-toast";
 import Link from "next/link";
@@ -39,7 +37,7 @@ export default function AddStudentPage() {
 
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch("http://localhost:8000/students/", {
+      const response = await fetch("http://127.0.0.1:8000/students/", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -65,9 +63,7 @@ export default function AddStudentPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-950 text-gray-900 dark:text-slate-200">
-      <TopBar />
       <div className="flex">
-        <Sidebar />
         <div className="flex-1 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           
           {/* Header */}

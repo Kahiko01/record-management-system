@@ -1,8 +1,6 @@
 "use client";
 
 import { useState, useRef } from "react";
-import TopBar from "../../components/TopBar";
-import Sidebar from "../../components/Sidebar";
 import { useAuth, Permission } from "../../context/AuthContext";
 import { clearanceApi } from "../../lib/api";
 import { Upload, FileSpreadsheet, CheckCircle, XCircle, AlertTriangle, RefreshCw, DollarSign } from "lucide-react";
@@ -140,9 +138,7 @@ ADM/2024/003,60000,60000`;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-950 text-gray-900 dark:text-slate-200">
-      <TopBar />
       <div className="flex">
-        <Sidebar />
         <div className="flex-1 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
           {/* Header */}

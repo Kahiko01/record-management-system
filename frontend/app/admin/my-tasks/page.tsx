@@ -3,8 +3,6 @@
 import { useState, useEffect } from "react";
 import { clearanceApi } from "@/app/lib/api";
 import { CheckCircle, XCircle, Clock, Loader2, AlertTriangle } from "lucide-react";
-import Sidebar from "@/app/components/Sidebar";
-import TopBar from "@/app/components/TopBar";
 import { useWebSocket } from "@/app/hooks/useWebSocket";
 
 export default function MyTasksPage() {
@@ -84,9 +82,7 @@ export default function MyTasksPage() {
 
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-900">
-      <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <TopBar />
         <main className="flex-1 overflow-y-auto p-6">
           <div className="max-w-6xl mx-auto">
             <div className="flex justify-between items-center mb-6">

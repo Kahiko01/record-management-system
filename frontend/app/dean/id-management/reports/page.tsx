@@ -22,7 +22,7 @@ export default function IDReportsPage() {
     setLoading(true);
     try {
       const token = localStorage.getItem('access_token');
-      let url = `http://localhost:8000/id-management/reports/${activeReport}`;
+      let url = `http://127.0.0.1:8000/id-management/reports/${activeReport}`;
 
       // Add date filters for issuance/collection reports
       if ((activeReport === "issuances" || activeReport === "collections") && (startDate || endDate)) {

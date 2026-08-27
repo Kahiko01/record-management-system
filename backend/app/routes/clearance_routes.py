@@ -36,7 +36,7 @@ async def request_clearance(
     request_data: ClearanceRequestCreate, db: Session = Depends(get_db),
     current_user: User = Depends(require_permission(Permission.STUDENT_APPLY_CLEARANCE))
 ):
-    student = db.query(Student).filter(Student.id == request_data.student_id, Student.user_id == current_user.id).first()
+    student = db.query(Student).filter(Student.id == request_data.student_id, Student.created_by == current_user.id).first()
     if not student: raise HTTPException(status_code=404, detail="Student not found")
     existing = db.query(ClearanceRequest).filter(ClearanceRequest.student_id == student.id).first()
     if existing: raise HTTPException(status_code=400, detail="Clearance request already exists")
@@ -85,7 +85,7 @@ async def request_clearance(
 async def get_my_clearance_status(
     db: Session = Depends(get_db), current_user: User = Depends(require_permission(Permission.STUDENT_VIEW_CLEARANCE_PROGRESS))
 ):
-    student = db.query(Student).filter(Student.user_id == current_user.id).first()
+    student = db.query(Student).filter(Student.created_by == current_user.id).first()
     if not student: raise HTTPException(status_code=404, detail="Student profile not found")
     clearance = db.query(ClearanceRequest).filter(ClearanceRequest.student_id == student.id).first()
     if not clearance: raise HTTPException(status_code=404, detail="No clearance request found")
@@ -104,7 +104,7 @@ async def get_finance_pending(
     if search:
         query = query.filter((Student.first_name.ilike(f"%{search}%")) | (Student.last_name.ilike(f"%{search}%")) | (Student.student_id.ilike(f"%{search}%")))
     if course:
-        query = query.filter(Student.program.ilike(f"%{course}%"))
+        query = query.filter(Student.programme.ilike(f"%{course}%"))
     if level:
         try:
             query = query.filter(Student.year_of_study == int(level))
@@ -178,7 +178,7 @@ async def get_examination_pending(
 ):
     query = db.query(Student)
     if search: query = query.filter((Student.first_name.ilike(f"%{search}%")) | (Student.last_name.ilike(f"%{search}%")) | (Student.student_id.ilike(f"%{search}%")))
-    if course: query = query.filter(Student.program.ilike(f"%{course}%"))
+    if course: query = query.filter(Student.programme.ilike(f"%{course}%"))
     if level:
         try: query = query.filter(Student.year_of_study == int(level))
         except ValueError: pass
@@ -236,7 +236,7 @@ async def get_dean_pending(
 ):
     query = db.query(Student)
     if search: query = query.filter((Student.first_name.ilike(f"%{search}%")) | (Student.last_name.ilike(f"%{search}%")) | (Student.student_id.ilike(f"%{search}%")))
-    if course: query = query.filter(Student.program.ilike(f"%{course}%"))
+    if course: query = query.filter(Student.programme.ilike(f"%{course}%"))
     if level:
         try: query = query.filter(Student.year_of_study == int(level))
         except ValueError: pass
@@ -393,7 +393,7 @@ async def get_fee_balances(
 ):
     query = db.query(Student)
     if search: query = query.filter((Student.first_name.ilike(f"%{search}%")) | (Student.last_name.ilike(f"%{search}%")) | (Student.student_id.ilike(f"%{search}%")))
-    if course: query = query.filter(Student.program.ilike(f"%{course}%"))
+    if course: query = query.filter(Student.programme.ilike(f"%{course}%"))
     if level:
         try: query = query.filter(Student.year_of_study == int(level))
         except ValueError: pass
@@ -680,7 +680,7 @@ async def get_program_distribution(
     current_user: User = Depends(get_current_active_user)
 ):
     """Returns student count per program for Pie Chart"""
-    results = db.query(Student.program, func.count(Student.id)).group_by(Student.program).all()
+    results = db.query(Student.programme, func.count(Student.id)).group_by(Student.programme).all()
     return [{"program": r[0] or "Unknown", "count": r[1]} for r in results]
 
 @router.get("/stats/bottlenecks")
@@ -744,7 +744,7 @@ async def get_my_notifications(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    student = db.query(Student).filter(Student.user_id == current_user.id).first()
+    student = db.query(Student).filter(Student.created_by == current_user.id).first()
     if not student:
         return []
 
@@ -771,7 +771,7 @@ async def mark_notification_read(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    student = db.query(Student).filter(Student.user_id == current_user.id).first()
+    student = db.query(Student).filter(Student.created_by == current_user.id).first()
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
 
@@ -799,7 +799,7 @@ async def get_clearance_overview(
 ):
     query = db.query(Student)
     if search: query = query.filter((Student.first_name.ilike(f"%{search}%")) | (Student.last_name.ilike(f"%{search}%")) | (Student.student_id.ilike(f"%{search}%")))
-    if course: query = query.filter(Student.program.ilike(f"%{course}%"))
+    if course: query = query.filter(Student.programme.ilike(f"%{course}%"))
     if level:
         try: query = query.filter(Student.year_of_study == int(level))
         except ValueError: pass

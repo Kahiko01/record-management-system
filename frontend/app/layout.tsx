@@ -3,6 +3,7 @@ import { AuthProvider } from "./context/AuthContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import { Toaster } from "react-hot-toast";
 import WelcomeModal from "./components/WelcomeModal";
+import DashboardShell from "./components/DashboardShell";
 
 export const metadata = {
   title: "KNP Record Management System",
@@ -17,7 +18,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <AuthProvider>
             <Toaster position="top-right" />
             <WelcomeModal />
-            {children}
+            
+            {/* The Smart Shell decides whether to show Sidebar/TopBar */}
+            <DashboardShell>
+              {children}
+            </DashboardShell>
+
           </AuthProvider>
         </ThemeProvider>
       </body>

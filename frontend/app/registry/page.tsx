@@ -1,310 +1,187 @@
 "use client";
 
-import { registryApi, clearanceApi } from "../lib/api";
 import { useState, useEffect } from "react";
-import TopBar from "../components/TopBar";
-import Sidebar from "../components/Sidebar";
-import { useAuth, Permission } from "../context/AuthContext";
-import { 
-  Package, Search, RefreshCw, CheckCircle, Clock, Archive, FileText, Users, TrendingUp, Award
-} from "lucide-react";
-import toast from 'react-hot-toast';
+import { useRouter } from "next/navigation";
+import { Search, Filter, FileText, Printer, CheckCircle, Clock, GraduationCap, Download } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
 
-const CERTIFICATE_TYPES = ["All Types", "Diploma", "Craft", "Transcript", "Testimonial"];
-
-export default function RegistryPage() {
-  const { hasPermission } = useAuth();
-  const [stats, setStats] = useState<any>(null);
-  const [inventory, setInventory] = useState<any[]>([]);
-  const [clearedStudents, setClearedStudents] = useState<any[]>([]);
+export default function RegistryDashboard() {
+  const { user } = useAuth();
+  const router = useRouter();
+  const [stats, setStats] = useState({ total: 0, printed: 0, pending: 0, collected: 0 });
+  const [certificates, setCertificates] = useState<any[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'inventory' | 'cleared'>('inventory');
-  const [filters, setFilters] = useState({ search: "", status: "", type: "All Types" });
+
+  const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : "";
+
+  // 🔐 ZERO TRUST: Enforce role-based access
+  useEffect(() => {
+    const allowedRoles = ["admin", "super_admin", "super admin", "registry_officer", "dean"];
+    if (user && !allowedRoles.includes(user.role)) {
+      alert("🚫 Access Denied: You do not have Zero Trust clearance for the Registry.");
+      router.push("/dashboard");
+    }
+  }, [user, router]);
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (!token) return;
 
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const statsRes = await registryApi.getRegistryStats();
-      setStats(statsRes.data);
+    // Fetch stats
+    fetch("http://127.0.0.1:8000/certificates/stats", {
+      headers: { "Authorization": `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(data => setStats(data))
+      .catch(err => console.error("Stats error:", err));
 
-      const params: any = {};
-      if (filters.search && filters.search.trim()) params.search = filters.search.trim();
-      if (filters.status && filters.status !== '' && filters.status !== 'All Status') params.status = filters.status;
-      if (filters.type && filters.type !== 'All Types') params.certificate_type = filters.type;
+    // Fetch certificates
+    fetch("http://127.0.0.1:8000/certificates", {
+      headers: { "Authorization": `Bearer ${token}` }
+    })
+      .then(res => res.json())
+      .then(data => setCertificates(Array.isArray(data) ? data : (data.items || [])))
+      .catch(err => console.error("List error:", err))
+      .finally(() => setLoading(false));
+  }, [token]);
 
-      const hasParams = Object.keys(params).length > 0;
-      const [inventoryRes, clearedRes] = await Promise.all([
-        registryApi.getCertificates(hasParams ? params : undefined),
-        clearanceApi.getClearedStudents(),
-      ]);
-
-      setInventory(inventoryRes.data || []);
-      setClearedStudents(clearedRes.data || []);
-    } catch (error: any) {
-      console.error("Failed to fetch registry data:", error);
-      toast.error("Failed to load registry data.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleMarkReady = async (studentId: number) => {
-    const loadingToast = toast.loading('Processing certificate...');
-    try {
-      await registryApi.markReady(studentId);
-      toast.success('Certificate marked as ready!', { id: loadingToast });
-      fetchData();
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.detail || "Failed to mark ready.";
-      toast.error(`Error: ${errorMessage}`, { id: loadingToast });
-    }
-  };
-
-  const getStatusBadge = (status: string) => {
-    const badges: Record<string, string> = {
-      "collected": "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/30",
-      "ready_for_collection": "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400 border-blue-200 dark:border-blue-500/30",
-      "ready": "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400 border-blue-200 dark:border-blue-500/30",
-      "awaiting_clearance": "bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400 border-yellow-200 dark:border-yellow-500/30",
-      "in_storage": "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400 border-amber-200 dark:border-amber-500/30",
-      "on_hold": "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400 border-red-200 dark:border-red-500/30",
-    };
-    const className = badges[status] || "bg-gray-100 text-gray-700 dark:bg-slate-500/20 dark:text-slate-400 border-gray-200 dark:border-slate-500/30";
-    return <span className={`px-2.5 py-1 text-xs font-bold rounded-full border ${className}`}>{status.replace(/_/g, ' ').toUpperCase()}</span>;
-  };
-
-  if (loading) return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-slate-950">
-      <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 dark:border-slate-800 border-t-emerald-500"></div>
-    </div>
+  const filteredCerts = certificates.filter((cert: any) => 
+    (cert.student_name || cert.full_name || "").toLowerCase().includes(searchTerm.toLowerCase()) &&
+    (statusFilter === "" || cert.status === statusFilter)
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-slate-950 text-gray-900 dark:text-slate-200">
-      <TopBar />
-      <div className="flex">
-        <Sidebar />
-        <div className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8 gap-4">
+    <div className="p-6 bg-gray-50 min-h-screen">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-2">
+          <GraduationCap className="text-blue-600" /> Certificate Registry
+        </h1>
+        <p className="text-gray-500 mt-1">Manage and track student certificates</p>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+          <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
-                <FileText className="h-8 w-8 text-emerald-500" />
-                Certificate Registry
-              </h1>
-              <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">Manage certificates, track collections, and monitor inventory</p>
+              <p className="text-sm text-gray-500">Total Certificates</p>
+              <p className="text-2xl font-bold text-gray-800">{stats.total}</p>
             </div>
-            <button onClick={fetchData} className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl text-sm transition-colors shadow-lg shadow-emerald-900/20">
-              <RefreshCw className="h-4 w-4" /> Refresh
-            </button>
+            <FileText className="text-blue-500 w-10 h-10 bg-blue-50 p-2 rounded-lg" />
           </div>
-
-          {/* Stats Cards */}
-          {stats && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 p-6 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500 dark:text-slate-400">Total Certificates</p>
-                    <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">{stats.total_certificates}</p>
-                  </div>
-                  <div className="p-3 bg-blue-100 dark:bg-blue-500/20 rounded-xl"><Package className="h-6 w-6 text-blue-600 dark:text-blue-400" /></div>
-                </div>
-              </div>
-              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 p-6 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500 dark:text-slate-400">Ready for Collection</p>
-                    <p className="text-3xl font-bold text-blue-600 dark:text-blue-400 mt-2">{stats.ready_for_collection}</p>
-                  </div>
-                  <div className="p-3 bg-blue-100 dark:bg-blue-500/20 rounded-xl"><CheckCircle className="h-6 w-6 text-blue-600 dark:text-blue-400" /></div>
-                </div>
-              </div>
-              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 p-6 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500 dark:text-slate-400">Collected</p>
-                    <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 mt-2">{stats.collected}</p>
-                  </div>
-                  <div className="p-3 bg-emerald-100 dark:bg-emerald-500/20 rounded-xl"><TrendingUp className="h-6 w-6 text-emerald-600 dark:text-emerald-400" /></div>
-                </div>
-              </div>
-              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 p-6 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-500 dark:text-slate-400">Awaiting Clearance</p>
-                    <p className="text-3xl font-bold text-yellow-600 dark:text-yellow-400 mt-2">{stats.awaiting_clearance}</p>
-                  </div>
-                  <div className="p-3 bg-yellow-100 dark:bg-yellow-500/20 rounded-xl"><Clock className="h-6 w-6 text-yellow-600 dark:text-yellow-400" /></div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Tabs */}
-          <div className="flex bg-gray-100 dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl p-1 mb-6">
-            <button onClick={() => setActiveTab('inventory')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'inventory' ? 'bg-white dark:bg-slate-800 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white'}`}>
-              <Archive className="h-4 w-4" /> Certificate Inventory
-            </button>
-            <button onClick={() => setActiveTab('cleared')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'cleared' ? 'bg-white dark:bg-slate-800 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white'}`}>
-              <Users className="h-4 w-4" /> Cleared Students
-            </button>
-          </div>
-
-          {/* Search & Filter Bar */}
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 p-5 mb-6 shadow-sm">
-            <div className="flex flex-col md:flex-row gap-4 items-end">
-              <div className="flex-1">
-                <label className="block text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Search</label>
-                <input
-                  type="text"
-                  value={filters.search}
-                  onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-                  onKeyPress={(e) => e.key === "Enter" && fetchData()}
-                  placeholder="Name or Certificate No"
-                  className="w-full px-4 py-2.5 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                />
-              </div>
-              
-              {/* NEW: Certificate Type Filter */}
-              <div className="w-40">
-                <label className="block text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Type</label>
-                <select
-                  value={filters.type}
-                  onChange={(e) => setFilters({ ...filters, type: e.target.value })}
-                  className="w-full px-3 py-2.5 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                >
-                  {CERTIFICATE_TYPES.map(type => (
-                    <option key={type} value={type === "All Types" ? "" : type}>{type}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="w-40">
-                <label className="block text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Status</label>
-                <select
-                  value={filters.status}
-                  onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-                  className="w-full px-3 py-2.5 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                >
-                  <option value="">All Status</option>
-                  <option value="awaiting_clearance">Awaiting Clearance</option>
-                  <option value="in_storage">In Storage</option>
-                  <option value="ready_for_collection">Ready</option>
-                  <option value="collected">Collected</option>
-                </select>
-              </div>
-
-              <button onClick={fetchData} className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl text-sm transition-colors shadow-lg flex items-center gap-2">
-                <Search className="h-4 w-4" /> Search
-              </button>
-              <button onClick={() => { setFilters({ search: "", status: "", type: "All Types" }); setTimeout(fetchData, 100); }} className="px-4 py-2.5 text-sm font-medium text-rose-500 hover:bg-rose-50 rounded-xl transition-colors">
-                Clear
-              </button>
-            </div>
-          </div>
-
-          {/* Inventory Table */}
-          {activeTab === 'inventory' && (
-            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-800">
-                    <tr>
-                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Certificate No</th>
-                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Type</th>
-                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Student</th>
-                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Program</th>
-                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
-                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200 dark:divide-slate-800">
-                    {inventory.length === 0 ? (
-                      <tr><td colSpan={6} className="px-6 py-16 text-center text-gray-500 dark:text-slate-500"><Package className="h-12 w-12 text-emerald-500/30 mx-auto mb-3"/><p className="font-medium">No certificates found</p></td></tr>
-                    ) : (
-                      inventory.map((cert: any) => (
-                        <tr key={cert.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/30 transition-colors">
-                          <td className="px-6 py-4 text-sm font-semibold text-gray-900 dark:text-white">{cert.certificate_number}</td>
-                          
-                          {/* NEW: Certificate Type Column */}
-                          <td className="px-6 py-4 text-sm">
-                            <span className="flex items-center gap-1.5 text-gray-700 dark:text-slate-300">
-                              <Award className="h-3.5 w-3.5 text-emerald-500" />
-                              {cert.certificate_type || "Diploma"}
-                            </span>
-                          </td>
-
-                          <td className="px-6 py-4 text-sm">
-                            <p className="text-gray-700 dark:text-slate-300">{cert.student?.first_name || 'Unknown'} {cert.student?.last_name || ''}</p>
-                            <p className="text-xs text-gray-500 dark:text-slate-500">{cert.student?.student_id || 'N/A'}</p>
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-700 dark:text-slate-300">{cert.programme || 'N/A'}</td>
-                          <td className="px-6 py-4">{getStatusBadge(cert.status)}</td>
-                          <td className="px-6 py-4">
-                            {hasPermission(Permission.REGISTRY_MARK_AVAILABLE) && cert.status !== "collected" && cert.status !== "ready_for_collection" && (
-                              <button onClick={() => handleMarkReady(cert.student_id || cert.student?.id)} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-colors">
-                                Mark Ready
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* Cleared Students Table */}
-          {activeTab === 'cleared' && (
-            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-800">
-                    <tr>
-                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Student</th>
-                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Program</th>
-                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Clearance Date</th>
-                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Certificate Status</th>
-                      <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200 dark:divide-slate-800">
-                    {clearedStudents.length === 0 ? (
-                      <tr><td colSpan={5} className="px-6 py-16 text-center text-gray-500 dark:text-slate-500"><CheckCircle className="h-12 w-12 text-emerald-500/30 mx-auto mb-3"/><p className="font-medium">No cleared students found</p></td></tr>
-                    ) : (
-                      clearedStudents.map((student: any) => (
-                        <tr key={student.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/30 transition-colors">
-                          <td className="px-6 py-4 text-sm">
-                            <p className="font-semibold text-gray-900 dark:text-white">{student.first_name} {student.last_name}</p>
-                            <p className="text-xs text-gray-500 dark:text-slate-500">{student.student_id}</p>
-                          </td>
-                          <td className="px-6 py-4 text-sm"><p className="text-gray-700 dark:text-slate-300">{student.program}</p></td>
-                          <td className="px-6 py-4 text-sm text-gray-700 dark:text-slate-300">{student.clearance_date ? new Date(student.clearance_date).toLocaleDateString() : "N/A"}</td>
-                          <td className="px-6 py-4">{getStatusBadge(student.certificate_status || "awaiting_clearance")}</td>
-                          <td className="px-6 py-4">
-                            {hasPermission(Permission.REGISTRY_MARK_AVAILABLE) && student.certificate_status !== "collected" && (
-                              <button onClick={() => handleMarkReady(student.id)} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-colors">
-                                Mark Ready
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
         </div>
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500">Printed</p>
+              <p className="text-2xl font-bold text-green-600">{stats.printed}</p>
+            </div>
+            <Printer className="text-green-500 w-10 h-10 bg-green-50 p-2 rounded-lg" />
+          </div>
+        </div>
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500">Pending</p>
+              <p className="text-2xl font-bold text-yellow-600">{stats.pending}</p>
+            </div>
+            <Clock className="text-yellow-500 w-10 h-10 bg-yellow-50 p-2 rounded-lg" />
+          </div>
+        </div>
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500">Collected</p>
+              <p className="text-2xl font-bold text-purple-600">{stats.collected}</p>
+            </div>
+            <CheckCircle className="text-purple-500 w-10 h-10 bg-purple-50 p-2 rounded-lg" />
+          </div>
+        </div>
+      </div>
+
+      {/* Search and Filters */}
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-6">
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-3 text-gray-400 w-5 h-5" />
+            <input
+              type="text"
+              placeholder="Search by student name or admission number..."
+              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <div className="relative w-full md:w-64">
+            <Filter className="absolute left-3 top-3 text-gray-400 w-5 h-5" />
+            <select
+              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none outline-none bg-white"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
+              <option value="">All Statuses</option>
+              <option value="Pending">Pending</option>
+              <option value="Printed">Printed</option>
+              <option value="Collected">Collected</option>
+            </select>
+          </div>
+          <button className="flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">
+            <Download className="w-4 h-4" /> Export CSV
+          </button>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        {loading ? (
+          <div className="p-8 text-center text-gray-500">Loading certificates...</div>
+        ) : (
+          <table className="w-full">
+            <thead className="bg-gray-50 border-b border-gray-100">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Programme</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Certificate Type</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date Issued</th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {filteredCerts.length > 0 ? (
+                filteredCerts.map((cert: any, index: number) => (
+                  <tr key={cert.id || index} className="hover:bg-gray-50 transition">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900">{cert.student_name || cert.full_name || "Unknown"}</div>
+                      <div className="text-sm text-gray-500">{cert.admission_number || cert.student_id || "N/A"}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{cert.programme || cert.program || "N/A"}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{cert.type || "Diploma"}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                        ${cert.status === 'Collected' ? 'bg-green-100 text-green-800' : 
+                          cert.status === 'Printed' ? 'bg-blue-100 text-blue-800' : 
+                          'bg-yellow-100 text-yellow-800'}`}>
+                        {cert.status || "Pending"}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{cert.date_issued || cert.created_at?.split('T')[0] || "N/A"}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <button className="text-blue-600 hover:text-blue-900 font-medium">View</button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                    No certificates found. Try adjusting your search or filters.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );

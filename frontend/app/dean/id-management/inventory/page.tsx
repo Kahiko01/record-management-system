@@ -13,7 +13,7 @@ export default function InventoryPage() {
     setLoading(true);
     try {
       const token = localStorage.getItem('access_token');
-      const res = await fetch(`http://localhost:8000/id-management/cards?search=${searchQuery}`, {
+      const res = await fetch(`http://127.0.0.1:8000/id-management/cards?search=${searchQuery}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();

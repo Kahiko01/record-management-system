@@ -1,8 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import TopBar from "../../components/TopBar";
-import Sidebar from "../../components/Sidebar";
 import { useAuth, Permission } from "../../context/AuthContext";
 import { clearanceApi, studentApi } from "../../lib/api";
 import { ClearanceRequest, ClearanceStatus, Student } from "../../types";
@@ -91,9 +89,7 @@ export default function ExaminationClearancePage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-950 text-gray-900 dark:text-slate-200">
-      <TopBar />
       <div className="flex">
-        <Sidebar />
         <div className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
           {/* Header */}

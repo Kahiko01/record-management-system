@@ -4,8 +4,6 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth, Permission } from "../../context/AuthContext";
 import { clearanceApi } from "../../lib/api";
-import TopBar from "../../components/TopBar";
-import Sidebar from "../../components/Sidebar";
 import {
   GraduationCap, CheckCircle2, Clock, XCircle, AlertCircle,
   Search, Filter, RefreshCw, User, Calendar, BookOpen,
@@ -134,9 +132,7 @@ export default function DeanClearancePage() {
 
   return (
     <div className="min-h-screen bg-slate-50/60 dark:bg-slate-950 text-slate-800 dark:text-slate-200">
-      <TopBar />
       <div className="flex">
-        <Sidebar />
 
         <main className="flex-1 ml-64 min-h-screen p-6 lg:p-8">
 

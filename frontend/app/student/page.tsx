@@ -1,8 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import TopBar from "../components/TopBar";
-import Sidebar from "../components/Sidebar";
 import { useAuth } from "../context/AuthContext";
 import { clearanceApi, studentApi } from "../lib/api";
 import { CheckCircle, Clock, XCircle, GraduationCap, FileText, ArrowRight, Send } from "lucide-react";
@@ -72,9 +70,7 @@ export default function StudentPortalPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-950 text-gray-900 dark:text-slate-200">
-      <TopBar />
       <div className="flex">
-        <Sidebar />
         <div className="flex-1 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">

@@ -288,7 +288,8 @@ async def preview_bulk_students(
         "valid_count": len(valid_students),
         "invalid_count": len(errors),
         "errors": errors,
-        "preview": valid_students[:10]
+        "preview": valid_students[:10],
+        "all_valid_students": valid_students
     }
 
 
@@ -302,6 +303,37 @@ from fastapi import Body
 
 
 from fastapi import Request
+
+
+@router.get("/{student_id}")
+async def get_student(
+    student_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get a single student by ID for editing"""
+    student = db.query(Student).filter(Student.id == student_id, Student.deleted_at == None).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    
+    return {
+        "id": student.id,
+        "admission_number": student.admission_number,
+        "full_name": student.full_name,
+        "programme": student.programme,
+        "department": student.department,
+        "school": student.school,
+        "registration_year": student.registration_year,
+        "status": student.status,
+        "gender": student.gender,
+        "date_of_birth": student.date_of_birth,
+        "national_id": student.national_id,
+        "email": student.email,
+        "phone": student.phone,
+        "address": student.address,
+        "guardian_name": student.guardian_name,
+        "guardian_phone": student.guardian_phone
+    }
 
 @router.post("/bulk-import-records")
 async def confirm_bulk_import(

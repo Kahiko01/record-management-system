@@ -9,8 +9,6 @@ import {
   TrendingUp, Eye, Lock, Unlock, Server, Cpu, HardDrive,
   Wifi, CheckCircle2, XCircle, RefreshCw
 } from "lucide-react";
-import Sidebar from "../../components/Sidebar";
-import TopBar from "../../components/TopBar";
 import { useWebSocket, WebSocketMessage } from "../../hooks/useWebSocket";
 
 export default function MonitoringPage() {
@@ -110,9 +108,7 @@ export default function MonitoringPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 transition-colors">
-      <TopBar />
       <div className="flex">
-        <Sidebar />
         <main className="flex-1 ml-64 p-6 lg:p-8 min-h-screen">
           <div className="max-w-7xl mx-auto space-y-6">
 
