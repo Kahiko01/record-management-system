@@ -826,3 +826,25 @@ async def merge_upload_students(
         "error_count": error_count,
         "errors": errors[:20]
     }
+
+@router.put("/{student_id}/reactivate")
+def reactivate_student(
+    student_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    try:
+        student = db.query(Student).filter(Student.id == student_id).first()
+        if not student:
+            raise HTTPException(status_code=404, detail="Student not found")
+        
+        # Safely update status to ACTIVE
+        setattr(student, 'status', 'ACTIVE')
+        db.commit()
+        return {"message": "Student reactivated successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        print(f"Reactivate error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to reactivate: {str(e)}")

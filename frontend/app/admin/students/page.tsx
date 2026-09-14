@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Eye, FileCheck, Edit, X, GraduationCap, DollarSign, CheckCircle, XCircle, Upload, Plus, Filter, Download } from "lucide-react";
+import { Search, Eye, FileCheck, Edit, X, GraduationCap, DollarSign, CheckCircle, XCircle, Upload, Plus, Filter, Download, UserCheck } from "lucide-react";
 
 export default function StudentsPage() {
   const router = useRouter();
@@ -144,6 +144,27 @@ export default function StudentsPage() {
 
   const openDeactivateModal = (student: any) => { setStudentToDeactivate(student); setDeactivateChecks({ library: false, finance: false, id_surrendered: false }); setDeactivateReason("Withdrawn"); setIsDeactivateModalOpen(true); };
 
+
+  const reactivateStudent = async (student: any) => {
+    if (!confirm(`Are you sure you want to reactivate ${student.full_name || student.name}? They will be set to ACTIVE status.`)) return;
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/students/${student.id}/reactivate`, {
+        method: "PUT",
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) {
+        alert(`✅ ${student.full_name || student.name} has been reactivated!`);
+        fetchStudents();
+        fetchStats();
+      } else {
+        const err = await res.json();
+        alert(`❌ Failed: ${err.detail}`);
+      }
+    } catch (err) {
+      alert("Network error");
+    }
+  };
+
   const confirmDeactivation = async () => {
     if (!deactivateChecks.library || !deactivateChecks.finance) { alert("⚠️ Please confirm Library and Finance clearances."); return; }
     try {
@@ -241,7 +262,11 @@ export default function StudentsPage() {
                         <button onClick={() => handleViewStudent(student)} className="p-2 text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-lg transition" title="View Details"><Eye className="w-4 h-4" /></button>
                         <button onClick={() => { setSelectedStudent(student); setIsClearanceModalOpen(true); }} className="p-2 text-green-600 hover:bg-green-100 dark:hover:bg-green-900/30 rounded-lg transition" title="Manage Clearance"><FileCheck className="w-4 h-4" /></button>
                         <button onClick={() => handleEditStudent(student)} className="p-2 text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition" title="Edit Student"><Edit className="w-4 h-4" /></button>
-                        <button onClick={() => openDeactivateModal(student)} className="p-2 text-yellow-600 hover:bg-yellow-100 dark:hover:bg-yellow-900/30 rounded-lg transition" title="Deactivate Student"><XCircle className="w-4 h-4" /></button>
+                        {student.status === 'WITHDRAWN' || student.status === 'INACTIVE' ? (
+                          <button onClick={() => reactivateStudent(student)} className="p-2 text-green-600 hover:bg-green-100 dark:hover:bg-green-900/30 rounded-lg transition" title="Reactivate Student"><UserCheck className="w-4 h-4" /></button>
+                        ) : (
+                          <button onClick={() => openDeactivateModal(student)} className="p-2 text-yellow-600 hover:bg-yellow-100 dark:hover:bg-yellow-900/30 rounded-lg transition" title="Deactivate Student"><XCircle className="w-4 h-4" /></button>
+                        )}
                       </div>
                     </td>
                   </tr>
