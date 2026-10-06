@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, Request
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from .routes import student_records_routes
@@ -57,6 +57,20 @@ app = FastAPI(
     description="Complete university record management with clearance workflow",
     version="1.0.0"
 )
+
+# 🔐 CORS Configuration for Frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# 🔐 BULLETPROOF CORS CONFIGURATION
+
+
 
 # ==================== IP ACCESS CONTROL MIDDLEWARE ====================
 # MUST be added BEFORE CORS to ensure IP checks happen first
@@ -487,10 +501,4 @@ if __name__ == "__main__":
 
 
 # --- Clean, Bulletproof CORS Configuration ---
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://0.0.0.0:3000"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+
