@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>KAHIKO // Zero Trust Boot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* warm amber palette */
+    --amber:      #ffb347;
+    --coral:      #ff7e5f;
+    --gold:       #ffd166;
+    --peach:      #ff9a76;
+    --cream:      #fff4d6;
+    --mint:       #a8e6a1;
+    --tangerine:  #ffa552;
+    --danger:     #ff5c5c;
+    --toast:      #7a5c3e;
+    --bg:         #0a0705;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--amber);
+    font-family: 'JetBrains Mono', 'Share Tech Mono', ui-monospace, monospace;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  /* ---------- matrix rain canvas ---------- */
+  #rain {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    opacity: 0.85;
+  }
+
+  /* subtle scanline overlay */
+  .scanlines::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 5;
+    background: repeating-linear-gradient(
+      to bottom,
+      rgba(255, 179, 71, 0.035) 0px,
+      rgba(255, 179, 71, 0.035) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    mix-blend-mode: screen;
+  }
+
+  /* ---------- layout ---------- */
+  .stage {
+    position: relative;
+    z-index: 2;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 24px;
+    gap: 22px;
+  }
+
+  /* ---------- big KAHIKO logo ---------- */
+  .logo {
+    font-size: clamp(64px, 14vw, 180px);
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    color: var(--amber);
+    text-shadow:
+      0 0 6px  rgba(255, 179, 71, 0.95),
+      0 0 18px rgba(255, 179, 71, 0.75),
+      0 0 42px rgba(255, 126, 95, 0.55),
+      0 0 90px rgba(255, 126, 95, 0.30);
+    animation: flicker 4.5s infinite;
+    line-height: 1;
+  }
+  @keyframes flicker {
+    0%, 100% { opacity: 1; }
+    48%      { opacity: 1; }
+    49%      { opacity: 0.72; }
+    50%      { opacity: 1; }
+    92%      { opacity: 0.88; }
+  }
+
+  /* ---------- subtitle ---------- */
+  .subtitle {
+    font-size: clamp(12px, 1.4vw, 18px);
+    letter-spacing: 0.55em;
+    color: var(--coral);
+    text-shadow: 0 0 10px rgba(255, 126, 95, 0.75);
+    margin-top: -8px;
+  }
+
+  /* ---------- institution badge ---------- */
+  .badge {
+    margin-top: 8px;
+    padding: 14px 40px;
+    border: 1px solid var(--gold);
+    box-shadow:
+      0 0 8px  rgba(255, 209, 102, 0.55),
+      inset 0 0 14px rgba(255, 209, 102, 0.12);
+    text-align: center;
+    background: rgba(255, 179, 71, 0.03);
+  }
+  .badge .line1 {
+    color: var(--gold);
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    font-size: clamp(11px, 1.1vw, 14px);
+  }
+  .badge .line2 {
+    margin-top: 6px;
+    color: var(--mint);
+    letter-spacing: 0.28em;
+    font-size: clamp(10px, 1vw, 12px);
+  }
+
+  /* ---------- boot sequence header ---------- */
+  .seq-header {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    width: min(720px, 90vw);
+    color: var(--mint);
+    font-size: clamp(11px, 1.1vw, 14px);
+    letter-spacing: 0.28em;
+    margin-top: 10px;
+  }
+  .seq-header::before,
+  .seq-header::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(
+      to right,
+      transparent,
+      var(--mint),
+      transparent
+    );
+    box-shadow: 0 0 8px rgba(168, 230, 161, 0.65);
+  }
+
+  /* ---------- boot list ---------- */
+  .boot-list {
+    width: min(720px, 90vw);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 6px;
+  }
+
+  .boot-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-size: clamp(12px, 1.15vw, 15px);
+    letter-spacing: 0.08em;
+    color: var(--amber);
+    opacity: 0;
+    transform: translateX(-8px);
+    animation: slideIn 0.35s ease forwards;
+  }
+  @keyframes slideIn {
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  .boot-item .check {
+    color: var(--mint);
+    font-weight: 700;
+    text-shadow: 0 0 8px rgba(168, 230, 161, 0.85);
+  }
+
+  .boot-item .label {
+    flex: 1;
+  }
+
+  .boot-item .ok {
+    color: var(--mint);
+    font-size: 0.85em;
+    letter-spacing: 0.22em;
+    text-shadow: 0 0 6px rgba(168, 230, 161, 0.7);
+  }
+
+  /* ---------- footer / status ---------- */
+  .footer {
+    position: fixed;
+    bottom: 18px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 11px;
+    letter-spacing: 0.4em;
+    color: var(--toast);
+    z-index: 3;
+  }
+  .footer .cursor {
+    display: inline-block;
+    width: 8px;
+    height: 12px;
+    background: var(--amber);
+    margin-left: 6px;
+    vertical-align: -2px;
+    animation: blink 1s steps(1) infinite;
+    box-shadow: 0 0 8px rgba(255, 179, 71, 0.9);
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+</style>
+</head>
+<body class="scanlines">
+
+<canvas id="rain"></canvas>
+
+<div class="stage">
+  <div class="logo">KAHIKO</div>
+  <div class="subtitle">K A H I K O &nbsp;//&nbsp; Z E R O &nbsp; T R U S T &nbsp; C O R E</div>
+
+  <div class="badge">
+    <div class="line1">KABETE NATIONAL POLYTECHNIC</div>
+    <div class="line2">SECURE RECORDS DIVISION</div>
+  </div>
+
+  <div class="seq-header">[ KAHIKO SYSTEM BOOT SEQUENCE ]</div>
+
+  <div class="boot-list" id="bootList"></div>
+</div>
+
+<div class="footer">
+  READY
+  <span class="cursor"></span>
+</div>
+
+<script>
+/* ───────────────────────────────────────────────
+   Boot steps — one is added every ~260 ms
+   ─────────────────────────────────────────────── */
+const bootSteps = [
+  "INITIALIZING KAHIKO CORE",
+  "LOADING NEURAL INTERFACE",
+  "ESTABLISHING ZERO-TRUST GATEWAY",
+  "CONNECTING SECURE DATABASE",
+  "SYNCHRONIZING RBAC MATRIX",
+  "LOADING RECORD MANAGEMENT MODULES",
+  "ACTIVATING SECURITY MONITOR",
+  "VERIFYING ENCRYPTION KEYS",
+  "MOUNTING AUDIT LEDGER",
+];
+
+const list = document.getElementById("bootList");
+bootSteps.forEach((label, i) => {
+  setTimeout(() => {
+    const row = document.createElement("div");
+    row.className = "boot-item";
+    row.innerHTML = `
+      <span class="check">[✓]</span>
+      <span class="label">${label}</span>
+      <span class="ok">OK</span>
+    `;
+    list.appendChild(row);
+  }, i * 260);
+});
+
+/* ───────────────────────────────────────────────
+   Warm matrix rain on canvas
+   ─────────────────────────────────────────────── */
+const canvas = document.getElementById("rain");
+const ctx = canvas.getContext("2d");
+
+function size() {
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+size();
+window.addEventListener("resize", size);
+
+const glyphs = "ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉ0123456789ABCDEF<>*+=-";
+const fontSize = 16;
+const columns = () => Math.floor(canvas.width / fontSize);
+let drops = Array.from({ length: columns() }, () => Math.random() * -50);
+
+/* warm palette: head bright cream, trail amber→coral→red→toast */
+const trail = [
+  "#fff4d6",
+  "#ffb347",
+  "#ff9a76",
+  "#ff7e5f",
+  "#ff5c5c",
+  "#7a5c3e",
+];
+
+function draw() {
+  // fade previous frame for trail effect
+  ctx.fillStyle = "rgba(10, 7, 5, 0.10)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.font = `${fontSize}px 'JetBrains Mono', monospace`;
+  ctx.textBaseline = "top";
+
+  const cols = columns();
+  if (drops.length !== cols) {
+    drops = Array.from({ length: cols }, () => Math.random() * -50);
+  }
+
+  for (let i = 0; i < cols; i++) {
+    const x = i * fontSize;
+    const y = drops[i] * fontSize;
+    const ch = glyphs[Math.floor(Math.random() * glyphs.length)];
+
+    // draw head
+    ctx.fillStyle = trail[0];
+    ctx.shadowColor = trail[1];
+    ctx.shadowBlur = 10;
+    ctx.fillText(ch, x, y);
+    ctx.shadowBlur = 0;
+
+    // draw short trail behind
+    for (let t = 1; t < trail.length; t++) {
+      ctx.fillStyle = trail[t];
+      const prev = glyphs[Math.floor(Math.random() * glyphs.length)];
+      ctx.fillText(prev, x, y - t * fontSize);
+    }
+
+    if (y > canvas.height && Math.random() > 0.975) drops[i] = 0;
+    drops[i] += 0.6 + Math.random() * 0.4;
+  }
+}
+
+setInterval(draw, 45);
+</script>
+</body>
+</html>

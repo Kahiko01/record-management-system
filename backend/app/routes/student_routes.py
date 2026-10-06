@@ -28,14 +28,10 @@ async def get_students(
     """Get all students with optional search and pagination"""
     query = db.query(Student)
     
-    # Apply Finance Clearance Filter
-    if finance_cleared:
-        query = query.filter(Student.paid_fee >= Student.total_fee)
     if search:
         query = query.filter(
-            (Student.first_name.ilike(f"%{search}%")) |
-            (Student.last_name.ilike(f"%{search}%")) |
-            (Student.student_id.ilike(f"%{search}%"))
+            (Student.full_name.ilike(f"%{search}%")) |
+            (Student.admission_number.ilike(f"%{search}%"))
         )
     return query.offset(skip).limit(limit).all()
 

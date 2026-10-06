@@ -168,20 +168,6 @@ async def list_id_cards(
     cards = query.order_by(IDCard.created_at.desc()).limit(100).all()
     return cards
 
-@router.get("/cards/{card_id}")
-async def get_id_card(
-    card_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    """Get details of a specific ID card"""
-    card = db.query(IDCard).filter(IDCard.id == card_id).first()
-    if not card:
-        raise HTTPException(status_code=404, detail="ID card not found")
-    return card
-
-# ============= STUDENT-LINKED CARD SEARCHES =============
-
 @router.get("/cards/pending-collection")
 async def get_pending_collection_cards(
     search: Optional[str] = None,
@@ -189,17 +175,17 @@ async def get_pending_collection_cards(
     current_user: User = Depends(get_current_active_user)
 ):
     """Find cards with status=ASSIGNED (ready for physical collection)"""
+    # Simplified join to avoid NULL comparison issues
     query = db.query(IDCard, Student).join(
         Student, IDCard.assigned_to_student_id == Student.id
-    ).filter(IDCard.status == "ASSIGNED", Student.deleted_at == None)
+    ).filter(IDCard.status == "ASSIGNED")
     
     if search:
         search_term = f"%{search}%"
         query = query.filter(
             or_(
-                Student.student_id.ilike(search_term),
-                Student.first_name.ilike(search_term),
-                Student.last_name.ilike(search_term)
+                Student.admission_number.ilike(search_term),
+                Student.full_name.ilike(search_term)
             )
         )
     
@@ -210,10 +196,10 @@ async def get_pending_collection_cards(
             "card_number": card.card_number,
             "serial_number": card.serial_number,
             "student_id": student.id,
-            "admission_number": student.student_id,
-            "full_name": f"{student.first_name} {student.middle_name or ''} {student.last_name}".strip(),
-            "programme": student.program,
-            "department": student.faculty,
+            "admission_number": student.admission_number,
+            "full_name": student.full_name,
+            "programme": student.programme,
+            "department": student.department,
             "issued_date": card.issued_date.isoformat() if card.issued_date else None
         }
         for card, student in results
@@ -228,15 +214,14 @@ async def get_issued_cards(
     """Find cards with status=ISSUED (for lost/damaged reporting)"""
     query = db.query(IDCard, Student).join(
         Student, IDCard.assigned_to_student_id == Student.id
-    ).filter(IDCard.status == "ISSUED", Student.deleted_at == None)
+    ).filter(IDCard.status == "ISSUED", True)
     
     if search:
         search_term = f"%{search}%"
         query = query.filter(
             or_(
-                Student.student_id.ilike(search_term),
-                Student.first_name.ilike(search_term),
-                Student.last_name.ilike(search_term)
+                Student.admission_number.ilike(search_term),
+                Student.full_name.ilike(search_term)
             )
         )
     
@@ -247,10 +232,10 @@ async def get_issued_cards(
             "card_number": card.card_number,
             "serial_number": card.serial_number,
             "student_id": student.id,
-            "admission_number": student.student_id,
-            "full_name": f"{student.first_name} {student.middle_name or ''} {student.last_name}".strip(),
-            "programme": student.program,
-            "department": student.faculty,
+            "admission_number": student.admission_number,
+            "full_name": student.full_name,
+            "programme": student.programme,
+            "department": student.department,
             "collection_date": card.collection_date.isoformat() if card.collection_date else None
         }
         for card, student in results
@@ -268,26 +253,45 @@ async def search_students_for_id(
     
     search_term = f"%{search}%"
     students = db.query(Student).filter(
-        Student.deleted_at == None,
+        True,
         or_(
-            Student.student_id.ilike(search_term),
-            Student.first_name.ilike(search_term),
-            Student.last_name.ilike(search_term)
+            Student.admission_number.ilike(search_term),
+            Student.full_name.ilike(search_term)
         )
     ).limit(10).all()
     
     return [
         {
             "id": s.id,
-            "admission_number": s.student_id,
-            "full_name": f"{s.first_name} {s.middle_name or ''} {s.last_name}".strip(),
-            "programme": s.program,
-            "department": s.faculty,
-            "year_of_study": s.year_of_study,
-            "status": "GRADUATED" if s.is_alumni else "ACTIVE"
+            "admission_number": s.admission_number,
+            "full_name": s.full_name,
+            "programme": s.programme,
+            "department": s.department,
+            "year_of_study": s.registration_year,
+            "status": s.status
         }
         for s in students
     ]
+
+@router.get("/cards/{card_id}")
+async def get_id_card(
+    card_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get details of a specific ID card"""
+    card = db.query(IDCard).filter(IDCard.id == card_id).first()
+    if not card:
+        raise HTTPException(status_code=404, detail="ID card not found")
+    return card
+
+# ============= STUDENT-LINKED CARD SEARCHES =============
+
+
+
+
+
+
 
 # ============= ID ISSUANCE =============
 
@@ -471,57 +475,63 @@ async def get_id_audit_logs(
     current_user: User = Depends(get_current_active_user)
 ):
     """Get a unified, chronological audit trail of all ID actions"""
+    logs = []
+    
+    try:
+        # 1. Fetch Issuances (Explicit queries to avoid lazy-loading failures)
+        issuances = db.query(IDIssuance).order_by(IDIssuance.created_at.desc()).all()
+        for i in issuances:
+            card = db.query(IDCard).filter(IDCard.id == i.card_id).first()
+            officer = db.query(User).filter(User.id == i.issuing_officer_id).first()
+            logs.append({
+                "timestamp": (i.created_at or i.issue_date).isoformat() if (i.created_at or i.issue_date) else "Unknown",
+                "action": "ISSUED",
+                "card_number": card.card_number if card else "Unknown",
+                "student_name": i.student_name or "Unknown",
+                "officer": officer.username if officer else f"ID: {i.issuing_officer_id}",
+                "details": f"Programme: {i.student_programme or 'N/A'} | Dept: {i.student_department or 'N/A'} | Notes: {i.notes or 'None'}"
+            })
+    except Exception as e:
+        print(f"Audit log issuance error: {e}")
 
-    # 1. Fetch Issuances
-    issuances = db.query(IDIssuance).order_by(IDIssuance.created_at.desc()).all()
-    issuance_logs = [
-        {
-            "timestamp": i.created_at.isoformat(),
-            "action": "ISSUED",
-            "card_number": i.card.card_number if i.card else "Unknown",
-            "student_name": i.student_name,
-            "officer": current_user.username, # In production, fetch from i.issuing_officer
-            "ip_address": i.ip_address,
-            "details": f"Programme: {i.student_programme} | Dept: {i.student_department} | Notes: {i.notes or 'None'}"
-        }
-        for i in issuances
-    ]
+    try:
+        # 2. Fetch Collections
+        collections = db.query(IDCollection).order_by(IDCollection.created_at.desc()).all()
+        for c in collections:
+            card = db.query(IDCard).filter(IDCard.id == c.card_id).first()
+            officer = db.query(User).filter(User.id == c.collected_by).first()
+            logs.append({
+                "timestamp": (c.created_at or c.collection_date).isoformat() if (c.created_at or c.collection_date) else "Unknown",
+                "action": "COLLECTED",
+                "card_number": card.card_number if card else "Unknown",
+                "student_name": f"Student ID: {c.student_id}",
+                "officer": officer.username if officer else f"ID: {c.collected_by}",
+                "details": f"Signature Acknowledged: {'Yes' if c.signature_acknowledged else 'No'} | Notes: {c.notes or 'None'}"
+            })
+    except Exception as e:
+        print(f"Audit log collection error: {e}")
 
-    # 2. Fetch Collections
-    collections = db.query(IDCollection).order_by(IDCollection.created_at.desc()).all()
-    collection_logs = [
-        {
-            "timestamp": c.created_at.isoformat(),
-            "action": "COLLECTED",
-            "card_number": c.card.card_number if c.card else "Unknown",
-            "student_name": f"Student ID: {c.student_id}",
-            "officer": current_user.username,
-            "ip_address": "N/A", # Add IP tracking to collection model later if needed
-            "details": f"Signature Acknowledged: {'Yes' if c.signature_acknowledged else 'No'} | Notes: {c.notes or 'None'}"
-        }
-        for c in collections
-    ]
+    try:
+        # 3. Fetch Replacements
+        replacements = db.query(IDReplacement).order_by(IDReplacement.created_at.desc()).all()
+        for r in replacements:
+            old_card = db.query(IDCard).filter(IDCard.id == r.old_card_id).first()
+            new_card = db.query(IDCard).filter(IDCard.id == r.new_card_id).first()
+            officer = db.query(User).filter(User.id == r.requested_by).first()
+            logs.append({
+                "timestamp": r.created_at.isoformat() if r.created_at else "Unknown",
+                "action": f"REPLACED ({r.reason})",
+                "card_number": f"Old: {old_card.card_number if old_card else '?'} -> New: {new_card.card_number if new_card else '?'}",
+                "student_name": f"Student ID: {old_card.assigned_to_student_id if old_card else '?'}",
+                "officer": officer.username if officer else f"ID: {r.requested_by}",
+                "details": f"Fee Paid: {'Yes' if r.fee_paid else 'No'} | Notes: {r.notes or 'None'}"
+            })
+    except Exception as e:
+        print(f"Audit log replacement error: {e}")
 
-    # 3. Fetch Replacements
-    replacements = db.query(IDReplacement).order_by(IDReplacement.created_at.desc()).all()
-    replacement_logs = [
-        {
-            "timestamp": r.created_at.isoformat(),
-            "action": f"REPLACED ({r.reason})",
-            "card_number": f"Old: {r.old_card.card_number if r.old_card else '?'} -> New: {r.new_card.card_number if r.new_card else '?'}",
-            "student_name": f"Student ID: {r.old_card.assigned_to_student_id if r.old_card else '?'}",
-            "officer": current_user.username,
-            "ip_address": "N/A",
-            "details": f"Fee Paid: {'Yes' if r.fee_paid else 'No'} | Notes: {r.notes or 'None'}"
-        }
-        for r in replacements
-    ]
-
-    # 4. Combine and Sort by Timestamp (Newest First)
-    all_logs = issuance_logs + collection_logs + replacement_logs
-    all_logs.sort(key=lambda x: x["timestamp"], reverse=True)
-
-    return all_logs
+    # Sort all logs by timestamp (newest first)
+    logs.sort(key=lambda x: x["timestamp"], reverse=True)
+    return logs
 
 # ============= REPORTS =============
 
@@ -596,22 +606,24 @@ async def get_issuance_report(
 
     issuances = query.order_by(IDIssuance.created_at.desc()).all()
 
-    return [
-        {
+    result = []
+    for i in issuances:
+        card = db.query(IDCard).filter(IDCard.id == i.card_id).first()
+        officer = db.query(User).filter(User.id == i.issuing_officer_id).first()
+        result.append({
             "id": i.id,
-            "timestamp": i.created_at.isoformat(),
-            "card_number": i.card.card_number if i.card else "Unknown",
-            "serial_number": i.card.serial_number if i.card else "Unknown",
+            "timestamp": i.created_at.isoformat() if i.created_at else "Unknown",
+            "card_number": card.card_number if card else "Unknown",
+            "serial_number": card.serial_number if card else "Unknown",
             "student_id": i.student_id,
             "student_name": i.student_name,
             "programme": i.student_programme,
             "department": i.student_department,
-            "issued_by": i.issuing_officer_id,
+            "issued_by": officer.username if officer else f"ID: {i.issuing_officer_id}",
             "ip_address": i.ip_address,
             "notes": i.notes
-        }
-        for i in issuances
-    ]
+        })
+    return result
 
 @router.get("/reports/collections")
 async def get_collection_report(
@@ -634,18 +646,20 @@ async def get_collection_report(
 
     collections = query.order_by(IDCollection.created_at.desc()).all()
 
-    return [
-        {
+    result = []
+    for c in collections:
+        card = db.query(IDCard).filter(IDCard.id == c.card_id).first()
+        officer = db.query(User).filter(User.id == c.collected_by).first()
+        result.append({
             "id": c.id,
-            "timestamp": c.created_at.isoformat(),
-            "card_number": c.card.card_number if c.card else "Unknown",
+            "timestamp": c.created_at.isoformat() if c.created_at else "Unknown",
+            "card_number": card.card_number if card else "Unknown",
             "student_id": c.student_id,
-            "collected_by": c.collected_by,
+            "collected_by": officer.username if officer else f"ID: {c.collected_by}",
             "signature_acknowledged": c.signature_acknowledged,
             "notes": c.notes
-        }
-        for c in collections
-    ]
+        })
+    return result
 
 @router.get("/reports/lost-damaged")
 async def get_lost_damaged_report(

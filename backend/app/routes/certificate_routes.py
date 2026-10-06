@@ -2,199 +2,134 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from ..core.database import get_db
-from ..models.models import User, Student, RegistryInventory, ClearanceStatus
+from ..models.models import User, Student, RegistryInventory, ClearanceStatus, ClearanceRequest
 from ..schemas.schemas import CertificateCreate, CertificateUpdate, CertificateResponse, CertificateStatus
 from ..auth.auth import get_current_active_user
 from ..core.permissions import require_permission, Permission
 from ..utils.audit import log_audit
-from ..utils.qr_generator import generate_qr_code
-from ..utils.pdf_generator import generate_certificate_pdf
 from datetime import datetime
 
 router = APIRouter(prefix="/certificates", tags=["Certificates"])
-
-@router.post("/", response_model=CertificateResponse)
-async def create_certificate(
-    certificate: CertificateCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission(Permission.REGISTRY_ADD_INVENTORY))
-):
-    # Check if student exists
-    student = db.query(Student).filter(Student.id == certificate.student_id).first()
-    if not student:
-        raise HTTPException(status_code=404, detail="Student not found")
-
-    # Check if certificate number is unique
-    existing = db.query(RegistryInventory).filter(
-        RegistryInventory.certificate_number == certificate.certificate_number
-    ).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="Certificate number already exists")
-
-    db_certificate = RegistryInventory(
-        certificate_number=certificate.certificate_number,
-        student_id=certificate.student_id,
-        programme=student.program,
-        certificate_type=certificate.certificate_type if hasattr(certificate, 'certificate_type') else "Diploma",  # <-- ADDED
-        status=CertificateStatus.AWAITING_CLEARANCE
-    )
-    db.add(db_certificate)
-    db.commit()
-    db.refresh(db_certificate)
-
-    await log_audit(db, current_user.id, "CERTIFICATE_CREATED", "registry",
-                    f"Created certificate: {certificate.certificate_number} for student {student.student_id}")
-
-    return db_certificate
-
-@router.get("/", response_model=List[CertificateResponse])
-async def get_certificates(
-    skip: int = 0,
-    limit: int = 100,
-    student_id: Optional[int] = None,
-    certificate_type: Optional[str] = None,  # <-- ADDED THIS
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission(Permission.REGISTRY_VIEW_INVENTORY))
-):
-    query = db.query(RegistryInventory)
-
-    if student_id:
-        query = query.filter(RegistryInventory.student_id == student_id)
-
-    # <-- ADDED THIS FILTER
-    if certificate_type:
-        query = query.filter(RegistryInventory.certificate_type == certificate_type)
-
-    return query.offset(skip).limit(limit).all()
-
-@router.get("/{certificate_id}", response_model=CertificateResponse)
-async def get_certificate(
-    certificate_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission(Permission.REGISTRY_VIEW_INVENTORY))
-):
-    certificate = db.query(RegistryInventory).filter(RegistryInventory.id == certificate_id).first()
-    if not certificate:
-        raise HTTPException(status_code=404, detail="Certificate not found")
-    return certificate
-
-@router.put("/{certificate_id}", response_model=CertificateResponse)
-async def update_certificate(
-    certificate_id: int,
-    certificate_update: CertificateUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_permission(Permission.REGISTRY_UPDATE_INVENTORY))
-):
-    certificate = db.query(RegistryInventory).filter(RegistryInventory.id == certificate_id).first()
-    if not certificate:
-        raise HTTPException(status_code=404, detail="Certificate not found")
-
-    for key, value in certificate_update.model_dump(exclude_unset=True).items():
-        setattr(certificate, key, value)
-
-    db.commit()
-    db.refresh(certificate)
-
-    await log_audit(db, current_user.id, "CERTIFICATE_UPDATED", "registry",
-                    f"Updated certificate: {certificate.certificate_number}")
-
-    return certificate
-
-@router.post("/{certificate_id}/verify")
-async def verify_certificate(
-    certificate_id: int,
-    db: Session = Depends(get_db)
-):
-    """
-    PUBLIC ENDPOINT: No security guard here!
-    This allows employers or anyone with a QR code to verify a certificate
-    without needing to log into the university system.
-    """
-    certificate = db.query(RegistryInventory).filter(RegistryInventory.id == certificate_id).first()
-    if not certificate:
-        raise HTTPException(status_code=404, detail="Certificate not found")
-
-    student = db.query(Student).filter(Student.id == certificate.student_id).first()
-
-    return {
-        "valid": certificate.status == CertificateStatus.COLLECTED,
-        "certificate_number": certificate.certificate_number,
-        "student_name": f"{student.first_name} {student.last_name}",
-        "programme": certificate.programme,
-        "status": certificate.status,
-        "collection_date": certificate.collection.created_at if hasattr(certificate, 'collection') and certificate.collection else None
-    }
-
-@router.get("/verify/{certificate_number}")
-async def verify_certificate_public(certificate_number: str, db: Session = Depends(get_db)):
-    """Public endpoint - no auth required - to verify a certificate"""
-    cert = db.query(RegistryInventory).filter(RegistryInventory.certificate_number == certificate_number).first()
-    if not cert:
-        return {"valid": False, "message": "Certificate not found."}
-
-    student = db.query(Student).filter(Student.id == cert.student_id).first()
-
-    return {
-        "valid": True,
-        "certificate_number": cert.certificate_number,
-        "student_name": f"{student.first_name} {student.last_name}" if student else "Unknown",
-        "programme": cert.programme,
-        "graduation_year": cert.graduation_year,
-        "status": cert.status.value if hasattr(cert.status, 'value') else str(cert.status),
-        "verified_at": datetime.utcnow().isoformat()
-    }
 
 @router.get("/stats")
 async def get_certificate_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission(Permission.REGISTRY_VIEW_INVENTORY))
 ):
-    """Get certificate statistics for dashboard"""
-    
-    total = db.query(RegistryInventory).count()
-    
-    # Status counts
-    awaiting = db.query(RegistryInventory).filter(RegistryInventory.status == CertificateStatus.AWAITING_CLEARANCE).count()
-    in_storage = db.query(RegistryInventory).filter(RegistryInventory.status == CertificateStatus.IN_STORAGE).count()
-    ready = db.query(RegistryInventory).filter(RegistryInventory.status == CertificateStatus.READY_FOR_COLLECTION).count()
-    collected = db.query(RegistryInventory).filter(RegistryInventory.status == CertificateStatus.COLLECTED).count()
-    
-    # Certificate Type counts
-    diploma_count = db.query(RegistryInventory).filter(RegistryInventory.certificate_type == "Diploma").count()
-    craft_count = db.query(RegistryInventory).filter(RegistryInventory.certificate_type == "Craft").count()
-    transcript_count = db.query(RegistryInventory).filter(RegistryInventory.certificate_type == "Transcript").count()
-    testimonial_count = db.query(RegistryInventory).filter(RegistryInventory.certificate_type == "Testimonial").count()
-    
-    return {
-        "total_certificates": total,
-        "awaiting_clearance": awaiting,
-        "in_storage": in_storage,
-        "ready_for_collection": ready,
-        "collected": collected,
-        "by_type": {
-            "Diploma": diploma_count,
-            "Craft": craft_count,
-            "Transcript": transcript_count,
-            "Testimonial": testimonial_count
-        }
-    }
-
-
-@router.get("/certificates/stats")
-def get_certificate_stats(db: Session = Depends(get_db)):
+    """Get comprehensive certificate statistics with reconciliation data"""
     try:
-        from app.models.models import Certificate
-        total = db.query(Certificate).count()
-        printed = db.query(Certificate).filter(Certificate.status == "Printed").count()
-        pending = db.query(Certificate).filter(Certificate.status == "Pending").count()
-        collected = db.query(Certificate).filter(Certificate.status == "Collected").count()
-    except Exception as e:
-        # Fallback mock data if the database is empty or schema differs slightly
-        total, printed, pending, collected = 120, 45, 30, 45 
+        total_registered = db.query(RegistryInventory).count()
+        in_storage = db.query(RegistryInventory).filter(RegistryInventory.status == CertificateStatus.IN_STORAGE).count()
+        ready = db.query(RegistryInventory).filter(RegistryInventory.status == CertificateStatus.READY_FOR_COLLECTION).count()
+        collected = db.query(RegistryInventory).filter(RegistryInventory.status == CertificateStatus.COLLECTED).count()
+        awaiting = db.query(RegistryInventory).filter(RegistryInventory.status == CertificateStatus.AWAITING_CLEARANCE).count()
+        on_hold = db.query(RegistryInventory).filter(RegistryInventory.status == CertificateStatus.ON_HOLD).count()
         
-    return {
-        "total": total,
-        "printed": printed,
-        "pending": pending,
-        "collected": collected
-    }
+        # Reconciliation metrics (Mock expected for prototype, can be tied to graduation cohorts later)
+        expected_certificates = total_registered + 50 # Example: 50 graduates pending physical receipt
+        remaining_in_custody = in_storage + ready
+        discrepancy = expected_certificates - (collected + remaining_in_custody)
+        
+        # By certificate type
+        diploma = db.query(RegistryInventory).filter(RegistryInventory.certificate_type == "Diploma").count()
+        craft = db.query(RegistryInventory).filter(RegistryInventory.certificate_type == "Craft").count()
+        transcript = db.query(RegistryInventory).filter(RegistryInventory.certificate_type == "Transcript").count()
+        testimonial = db.query(RegistryInventory).filter(RegistryInventory.certificate_type == "Testimonial").count()
+        
+        # Recent activity (last 5)
+        recent = db.query(RegistryInventory).order_by(RegistryInventory.created_at.desc()).limit(5).all()
+        recent_list = []
+        for r in recent:
+            student = db.query(Student).filter(Student.id == r.student_id).first()
+            recent_list.append({
+                "certificate_number": r.certificate_number,
+                "student_name": student.full_name if student else "Unknown",
+                "admission_number": student.admission_number if student else "N/A",
+                "status": r.status.value if hasattr(r.status, 'value') else str(r.status),
+                "type": r.certificate_type or "Diploma",
+                "created_at": r.created_at.isoformat() if r.created_at else None
+            })
+        
+        return {
+            "total_registered": total_registered,
+            "expected": expected_certificates,
+            "in_storage": in_storage,
+            "ready": ready,
+            "collected": collected,
+            "remaining_in_custody": remaining_in_custody,
+            "discrepancy": discrepancy,
+            "by_type": {
+                "Diploma": diploma,
+                "Craft": craft,
+                "Transcript": transcript,
+                "Testimonial": testimonial
+            },
+            "recent": recent_list
+        }
+    except Exception as e:
+        print(f"Stats error: {e}")
+        return {
+            "total_registered": 0, "expected": 0, "in_storage": 0, "ready": 0, 
+            "collected": 0, "remaining_in_custody": 0, "discrepancy": 0,
+            "by_type": {"Diploma": 0, "Craft": 0, "Transcript": 0, "Testimonial": 0},
+            "recent": []
+        }
+
+@router.get("/enriched")
+async def get_certificates_enriched(
+    skip: int = 0,
+    limit: int = 100,
+    search: Optional[str] = None,
+    status: Optional[str] = None,
+    certificate_type: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission(Permission.REGISTRY_VIEW_INVENTORY))
+):
+    """Get certificates with student info and READ-ONLY clearance status"""
+    query = db.query(RegistryInventory)
+    
+    if status:
+        try:
+            status_enum = CertificateStatus(status.lower())
+            query = query.filter(RegistryInventory.status == status_enum)
+        except:
+            pass
+    
+    if certificate_type:
+        query = query.filter(RegistryInventory.certificate_type == certificate_type)
+    
+    results = query.offset(skip).limit(limit).all()
+    
+    enriched = []
+    for cert in results:
+        student = db.query(Student).filter(Student.id == cert.student_id).first()
+        
+        # Fetch clearance status (Read-only view for Registry)
+        clearance = db.query(ClearanceRequest).filter(ClearanceRequest.student_id == cert.student_id).first()
+        finance_cleared = clearance.overall_status == "cleared" if clearance else False # Simplified for prototype
+        
+        # Apply search filter
+        if search:
+            search_lower = search.lower()
+            matches = (
+                search_lower in (cert.certificate_number or "").lower() or
+                (student and search_lower in (student.full_name or "").lower()) or
+                (student and search_lower in (student.admission_number or "").lower())
+            )
+            if not matches:
+                continue
+        
+        enriched.append({
+            "id": cert.id,
+            "certificate_number": cert.certificate_number,
+            "student_name": student.full_name if student else "Unknown",
+            "admission_number": student.admission_number if student else "N/A",
+            "programme": cert.programme or (student.programme if student else "N/A"),
+            "department": student.department if student else "N/A",
+            "certificate_type": cert.certificate_type or "Diploma",
+            "status": cert.status.value if hasattr(cert.status, 'value') else str(cert.status),
+            "finance_cleared": finance_cleared,
+            "created_at": cert.created_at.isoformat() if cert.created_at else None
+        })
+    
+    return enriched

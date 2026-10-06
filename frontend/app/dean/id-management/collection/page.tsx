@@ -1,189 +1,173 @@
 "use client";
-import { useState } from "react";
-import { Search, Handshake, FileSignature } from "lucide-react";
+
+import { useState, useEffect } from "react";
+import { Search, User, CheckCircle, FileSignature } from "lucide-react";
 
 export default function CollectionPage() {
-  const [collectionSearch, setCollectionSearch] = useState("");
-  const [assignedCards, setAssignedCards] = useState<any[]>([]);
-  const [selectedCollectionCard, setSelectedCollectionCard] = useState<any>(null);
-  const [signatureAcknowledged, setSignatureAcknowledged] = useState(false);
+  const [pendingCards, setPendingCards] = useState<any[]>([]);
+  const [search, setSearch] = useState("");
+  const [selectedCard, setSelectedCard] = useState<any>(null);
+  const [signatureAck, setSignatureAck] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const handleSearchForCollection = async () => {
+  const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : "";
+
+  useEffect(() => {
+    fetchPendingCards();
+  }, [token]);
+
+  const fetchPendingCards = async () => {
+    try {
+      const res = await fetch("http://127.0.0.1:8000/id-management/cards/pending-collection", {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      const data = await res.json();
+      setPendingCards(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Failed to fetch pending cards:", err);
+    }
+  };
+
+  const filteredCards = pendingCards.filter((c: any) => 
+    c.full_name.toLowerCase().includes(search.toLowerCase()) ||
+    c.admission_number.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const handleCollect = async () => {
+    if (!selectedCard || !signatureAck) {
+      alert("Please select a card and confirm the signature acknowledgment.");
+      return;
+    }
     setLoading(true);
     try {
-      const token = localStorage.getItem('access_token');
-      const url = collectionSearch.trim()
-        ? `http://127.0.0.1:8000/id-management/cards/pending-collection?search=${encodeURIComponent(collectionSearch)}`
-        : `http://127.0.0.1:8000/id-management/cards/pending-collection`;
-      const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
-      const data = await res.json();
-      setAssignedCards(data);
-      if (data.length === 0) {
-        alert("No pending collections found. Try a different search or issue a card first.");
+      const res = await fetch("http://127.0.0.1:8000/id-management/collect", {
+        method: "POST",
+        headers: { 
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ 
+          card_id: selectedCard.card_id,
+          student_id: selectedCard.student_id,
+          signature_acknowledged: true,
+          notes: "Collected via Dean Dashboard"
+        })
+      });
+      
+      if (res.ok) {
+        alert("✅ ID Card successfully collected and marked as ISSUED!");
+        setSelectedCard(null);
+        setSignatureAck(false);
+        fetchPendingCards(); // Refresh the list
+      } else {
+        const err = await res.json();
+        alert(`❌ Failed to collect: ${err.detail || "Unknown error"}`);
       }
     } catch (err) {
       console.error(err);
-      alert("Failed to search");
+      alert("❌ Network error occurred.");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleRecordCollection = async () => {
-    if (!selectedCollectionCard) return;
-    setLoading(true);
-    try {
-      const token = localStorage.getItem('access_token');
-      const res = await fetch('http://127.0.0.1:8000/id-management/collect', {
-        method: 'POST',
-        headers: { 
-          'Authorization': `Bearer ${token}`, 
-          'Content-Type': 'application/json' 
-        },
-        body: JSON.stringify({
-          card_id: selectedCollectionCard.card_id,
-          student_id: selectedCollectionCard.student_id,
-          signature_acknowledged: signatureAcknowledged,
-          notes: `Collected by ${selectedCollectionCard.full_name}`
-        })
-      });
-      if (res.ok) {
-        alert(`✅ Collection recorded for ${selectedCollectionCard.full_name}!`);
-        setSelectedCollectionCard(null);
-        setAssignedCards([]);
-        setCollectionSearch("");
-        setSignatureAcknowledged(false);
-      } else {
-        const err = await res.json();
-        alert(`❌ Error: ${err.detail}`);
-      }
-    } catch (err) { alert("Failed to record collection."); }
-    finally { setLoading(false); }
-  };
-
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Record Collection</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400">Verify student and record physical handover</p>
+    <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors duration-200">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+          <FileSignature className="text-purple-600 dark:text-purple-400" /> Record Collection
+        </h1>
+        <p className="text-gray-500 dark:text-gray-400 mt-1">Record physical handover of assigned ID cards</p>
       </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Step 1: Find Pending Collections */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            <Search className="w-5 h-5 text-blue-600" /> 1. Find Student with Pending ID
-          </h3>
-          <div className="flex gap-2 mb-4">
+        {/* Pending Cards List */}
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 transition-colors duration-200">
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2 text-gray-800 dark:text-gray-100">
+            <User className="w-5 h-5 text-purple-600 dark:text-purple-400" /> 1. Select Student for Collection
+          </h2>
+          <div className="relative mb-4">
+            <Search className="absolute left-3 top-3 text-gray-400 dark:text-gray-500 w-5 h-5" />
             <input
               type="text"
-              placeholder="Admission No. or Name..."
-              value={collectionSearch}
-              onChange={(e) => setCollectionSearch(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSearchForCollection()}
-              className="flex-1 px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 focus:ring-2 focus:ring-blue-500"
+              placeholder="Search by name or admission number..."
+              className="w-full pl-10 pr-4 py-2 border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-purple-500 outline-none transition-colors duration-200"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
             />
-            <button
-              onClick={handleSearchForCollection}
-              disabled={loading}
-              className="px-4 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50"
-            >
-              Search
-            </button>
           </div>
-          <button
-            onClick={() => { setCollectionSearch(""); handleSearchForCollection(); }}
-            className="text-xs text-blue-600 hover:underline mb-3"
-          >
-            Show all pending collections
-          </button>
-          
-          {assignedCards.length > 0 && (
-            <div className="space-y-2 max-h-96 overflow-y-auto">
-              {assignedCards.map(card => (
-                <button
-                  key={card.card_id}
-                  onClick={() => setSelectedCollectionCard(card)}
-                  className={`w-full text-left p-3 rounded-lg border transition ${
-                    selectedCollectionCard?.card_id === card.card_id
-                      ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
-                      : "border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
-                  }`}
-                >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <p className="font-medium text-gray-900 dark:text-white">{card.full_name}</p>
-                      <p className="text-xs font-mono text-blue-600 dark:text-blue-400">{card.admission_number}</p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Card: {card.card_number} • {card.programme}
-                      </p>
-                    </div>
-                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-                      PENDING
-                    </span>
+          <div className="max-h-96 overflow-y-auto space-y-2">
+            {filteredCards.map((c: any) => (
+              <div
+                key={c.card_id}
+                onClick={() => { setSelectedCard(c); setSignatureAck(false); }}
+                className={`p-3 border rounded-lg cursor-pointer hover:bg-purple-50 dark:hover:bg-purple-900/30 flex items-center justify-between transition-colors duration-200 ${
+                  selectedCard?.card_id === c.card_id 
+                    ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30 dark:border-purple-500' 
+                    : 'border-gray-200 dark:border-gray-600'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gray-200 dark:bg-gray-700 rounded-full flex items-center justify-center">
+                    <User className="w-6 h-6 text-gray-500 dark:text-gray-400" />
                   </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Step 2: Verify & Record */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            <Handshake className="w-5 h-5 text-emerald-600" /> 2. Verify & Record Handover
-          </h3>
-          {selectedCollectionCard ? (
-            <div className="space-y-6">
-              <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700">
-                <div className="flex justify-between mb-2">
-                  <span className="text-xs font-semibold uppercase text-gray-500">Student</span>
-                  <span className="text-sm font-medium text-gray-900 dark:text-white">{selectedCollectionCard.full_name}</span>
+                  <div>
+                    <p className="font-medium text-gray-900 dark:text-white">{c.full_name}</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">{c.admission_number} • {c.programme || "N/A"}</p>
+                  </div>
                 </div>
-                <div className="flex justify-between mb-2">
-                  <span className="text-xs font-semibold uppercase text-gray-500">Admission No.</span>
-                  <span className="text-sm font-mono text-blue-600 dark:text-blue-400">{selectedCollectionCard.admission_number}</span>
-                </div>
-                <div className="flex justify-between mb-2">
-                  <span className="text-xs font-semibold uppercase text-gray-500">ID Card</span>
-                  <span className="text-sm font-mono text-gray-900 dark:text-white">{selectedCollectionCard.card_number}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-xs font-semibold uppercase text-gray-500">Programme</span>
-                  <span className="text-sm text-gray-700 dark:text-gray-300">{selectedCollectionCard.programme}</span>
+                <div className="text-right">
+                  <p className="font-mono text-sm text-gray-700 dark:text-gray-300">{c.card_number}</p>
+                  <p className="text-xs text-yellow-600 dark:text-yellow-400 font-medium">PENDING</p>
                 </div>
               </div>
+            ))}
+            {filteredCards.length === 0 && (
+              <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">No pending collections found.</p>
+            )}
+          </div>
+        </div>
 
-              <label className="flex items-start gap-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={signatureAcknowledged}
-                  onChange={(e) => setSignatureAcknowledged(e.target.checked)}
-                  className="mt-1 h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-                />
-                <span className="text-sm text-amber-900 dark:text-amber-200">
-                  <span className="font-semibold block">Student Signature Acknowledged</span>
-                  <span className="text-xs opacity-80">I confirm the student has physically received this card and signed the register.</span>
-                </span>
-              </label>
-
-              <button
-                onClick={handleRecordCollection}
-                disabled={loading || !signatureAcknowledged}
-                className="w-full py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center justify-center gap-2"
-              >
-                {loading ? (
-                  <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                ) : (
-                  <FileSignature className="w-5 h-5" />
-                )}
-                Record Collection & Update Status to ISSUED
-              </button>
+        {/* Collection Confirmation */}
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 transition-colors duration-200">
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2 text-gray-800 dark:text-gray-100">
+            <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" /> 2. Confirm Handover
+          </h2>
+          
+          {!selectedCard ? (
+            <div className="flex flex-col items-center justify-center h-64 text-gray-400 dark:text-gray-500 border-2 border-dashed border-gray-200 dark:border-gray-600 rounded-lg">
+              <FileSignature className="w-12 h-12 mb-3" />
+              <p>Select a student from the list to begin</p>
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center h-48 text-gray-400">
-              <Handshake className="w-10 h-10 mb-2 opacity-50" />
-              <p className="text-sm">Select a student from the left to begin verification.</p>
+            <div className="space-y-6">
+              <div className="p-4 bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800 rounded-lg">
+                <p className="text-sm text-purple-800 dark:text-purple-200 font-medium mb-1">Collecting for:</p>
+                <p className="text-xl font-bold text-purple-900 dark:text-purple-100">{selectedCard.full_name}</p>
+                <p className="text-sm text-purple-700 dark:text-purple-300">{selectedCard.admission_number}</p>
+                <p className="text-sm font-mono mt-2 text-gray-600 dark:text-gray-400">Card: {selectedCard.card_number}</p>
+              </div>
+
+              <div className="flex items-start gap-3 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                <input
+                  type="checkbox"
+                  id="signature"
+                  checked={signatureAck}
+                  onChange={(e) => setSignatureAck(e.target.checked)}
+                  className="mt-1 w-5 h-5 text-purple-600 rounded focus:ring-purple-500 border-gray-300 dark:border-gray-600 dark:bg-gray-700"
+                />
+                <label htmlFor="signature" className="text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+                  I confirm that the student has <strong>physically signed</strong> the collection register and presented valid identification.
+                </label>
+              </div>
+
+              <button
+                onClick={handleCollect}
+                disabled={!signatureAck || loading}
+                className="w-full py-3 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 disabled:cursor-not-allowed transition-colors duration-200 flex items-center justify-center gap-2"
+              >
+                {loading ? "Processing..." : "Confirm Physical Collection"}
+              </button>
             </div>
           )}
         </div>
