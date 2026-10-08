@@ -65,7 +65,7 @@ export default function ReleaseCertificatePage() {
 
   const handleRelease = async () => {
     if (!acknowledged) {
-      alert("⚠️ You must confirm that the recipient has signed the acknowledgment.");
+      alert("⚠️ Zero Trust Policy: You must confirm that the recipient has signed the acknowledgment.");
       return;
     }
     if (!idNumber.trim()) {
@@ -91,7 +91,8 @@ export default function ReleaseCertificatePage() {
       });
 
       if (res.ok) {
-        alert("✅ Certificate successfully released and logged!");
+        const data = await res.json();
+        alert(`✅ SUCCESS!\n\nCertificate ${data.certificate_number} has been officially released.\nChain of custody updated in the Audit Ledger.`);
         router.push("/dashboard/registry");
       } else {
         const err = await res.json();
@@ -99,7 +100,7 @@ export default function ReleaseCertificatePage() {
       }
     } catch (err) {
       console.error(err);
-      alert("❌ Network error occurred.");
+      alert("❌ Network error occurred. Please check your connection.");
     } finally {
       setReleasing(false);
     }

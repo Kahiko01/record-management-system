@@ -171,11 +171,40 @@ async def release_certificate(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission(Permission.REGISTRY_UPDATE_INVENTORY))
 ):
+    """Securely release a certificate and log the Chain of Custody"""
     cert = db.query(RegistryInventory).filter(RegistryInventory.id == certificate_id).first()
     if not cert:
         raise HTTPException(status_code=404, detail="Certificate not found")
+    
     if cert.status not in [CertificateStatus.READY_FOR_COLLECTION, CertificateStatus.IN_STORAGE]:
         raise HTTPException(status_code=400, detail=f"Certificate is not ready for collection. Current status: {cert.status}")
+    
+    # 1. Update Status
     cert.status = CertificateStatus.COLLECTED
+    
+    # 2. Log the permanent Chain of Custody event
+    try:
+        from app.utils.audit import log_audit
+        import asyncio
+        recipient = collection_data.get("recipient_name", "Unknown")
+        id_num = collection_data.get("identification_number", "N/A")
+        notes = collection_data.get("notes", "")
+        
+        # Fire and forget audit log
+        asyncio.create_task(log_audit(
+            db, 
+            current_user.id, 
+            "CERTIFICATE_RELEASED", 
+            "registry",
+            f"Released {cert.certificate_number} to {recipient} (ID: {id_num}). Notes: {notes}"
+        ))
+    except Exception as e:
+        print(f"Audit log warning: {e}")
+        
     db.commit()
-    return {"message": "Certificate released successfully", "certificate_id": certificate_id}
+    
+    return {
+        "message": "Certificate released successfully", 
+        "certificate_id": certificate_id,
+        "certificate_number": cert.certificate_number
+    }
