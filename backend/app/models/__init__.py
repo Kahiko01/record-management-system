@@ -6,3 +6,4 @@ __all__ = [
     "Base", "User", "UserRole", "UserSession", "Task", "UserTask", "Student",
     "IDBatch", "IDCard", "IDIssuance", "IDCollection", "IDReplacement"
 ]
+from .appointment_link import AppointmentLink

@@ -28,7 +28,7 @@ export default function ReleaseCertificatePage() {
     try {
       if (!token) {
         alert("⚠️ You are not logged in. Please log in again.");
-        router.push("/login");
+        if (!pathname.startsWith("/appointment")) router.push("/login");
         return;
       }
       console.log("🔍 Searching for:", searchQuery, "with token:", token ? "Present" : "Missing");

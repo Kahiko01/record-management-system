@@ -6,6 +6,12 @@ import TopBar from "./TopBar";
 
 export default function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+
+  // 🚨 CRITICAL: Completely bypass admin shell and auth checks for public appointment links
+  if (pathname.startsWith('/appointment')) {
+    return <>{children}</>;
+  }
+
   
   // 🛡️ Public routes without sidebar/topbar
   const publicRoutes = ["/login", "/verify", "/"];

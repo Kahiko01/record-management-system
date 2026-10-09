@@ -13,6 +13,7 @@ import time
 import logging
 from dotenv import load_dotenv
 
+from app.routes import appointment_routes
 # Prometheus imports
 from prometheus_fastapi_instrumentator import Instrumentator
 from prometheus_fastapi_instrumentator.metrics import Info
@@ -196,6 +197,7 @@ app.include_router(student_routes.router)
 app.include_router(student_records_routes.router)
 app.include_router(clearance_routes.router)
 app.include_router(certificate_routes.router)
+app.include_router(appointment_routes.router)
 app.include_router(user_routes.router)
 app.include_router(audit_routes.router)
 app.include_router(ip_routes.router)

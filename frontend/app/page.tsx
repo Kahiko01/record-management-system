@@ -13,7 +13,7 @@ export default function Home() {
       if (isAuthenticated) {
         router.push('/dashboard');
       } else {
-        router.push('/login');
+        if (!pathname.startsWith('/appointment')) router.push('/login');
       }
     }
   }, [isAuthenticated, loading, router]);

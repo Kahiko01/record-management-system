@@ -205,13 +205,13 @@ export default function RegistryDashboard() {
                   <p className="text-xs text-slate-500">Identity check</p>
                 </div>
               </Link>
-              <button className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-500/10 border border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-500/30 transition group">
+              <Link href="/dashboard/registry/schedule" className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-500/10 border border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-500/30 transition group">
                 <Calendar className="h-5 w-5 text-slate-500 group-hover:text-blue-600" />
                 <div className="text-left">
                   <p className="text-sm font-medium text-slate-900 dark:text-white">Schedule Collection</p>
                   <p className="text-xs text-slate-500">Set appointment</p>
                 </div>
-              </button>
+              </Link>
               <Link href="/dashboard/registry/release" className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-500/10 border border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-500/30 transition group">
                 <CheckCircle2 className="h-5 w-5 text-slate-500 group-hover:text-blue-600" />
                 <div className="text-left">

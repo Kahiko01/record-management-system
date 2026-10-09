@@ -164,6 +164,43 @@ async def verify_certificate_public(certificate_number: str, db: Session = Depen
         "verified_at": datetime.utcnow().isoformat()
     }
 
+
+@router.post("/{certificate_id}/schedule")
+async def schedule_collection(
+    certificate_id: int,
+    appointment_data: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission(Permission.REGISTRY_UPDATE_INVENTORY))
+):
+    """Schedule a certificate collection appointment"""
+    cert = db.query(RegistryInventory).filter(RegistryInventory.id == certificate_id).first()
+    if not cert:
+        raise HTTPException(status_code=404, detail="Certificate not found")
+    
+    try:
+        from app.utils.audit import log_audit
+        import asyncio
+        date = appointment_data.get("appointment_date", "N/A")
+        time = appointment_data.get("appointment_time", "N/A")
+        notes = appointment_data.get("notes", "")
+        
+        asyncio.create_task(log_audit(
+            db,
+            current_user.id,
+            "APPOINTMENT_SCHEDULED",
+            "registry",
+            f"Scheduled collection for {cert.certificate_number} on {date} at {time}. Notes: {notes}"
+        ))
+    except Exception as e:
+        print(f"Audit log warning: {e}")
+    
+    return {
+        "message": "Appointment scheduled successfully",
+        "certificate_number": cert.certificate_number,
+        "appointment_date": appointment_data.get("appointment_date"),
+        "appointment_time": appointment_data.get("appointment_time")
+    }
+
 @router.post("/{certificate_id}/release")
 async def release_certificate(
     certificate_id: int,

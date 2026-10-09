@@ -130,7 +130,7 @@ export default function RegistryDashboard() {
   useEffect(() => {
     if (!authLoading) {
       if (!isAuthenticated) {
-        router.replace("/login");
+        if (!pathname.startsWith("/appointment")) router.replace("/login");
       } else if (!hasPermission(Permission.REGISTRY_VIEW_DASHBOARD) && !hasPermission(Permission.DASHBOARD_VIEW_REGISTRY)) {
         router.replace("/dashboard");
       }

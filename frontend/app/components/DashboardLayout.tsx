@@ -12,7 +12,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      router.replace("/login");
+      if (!pathname.startsWith("/appointment")) router.replace("/login");
     }
   }, [authLoading, isAuthenticated, router]);
 

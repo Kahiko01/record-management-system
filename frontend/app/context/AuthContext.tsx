@@ -305,8 +305,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (username: string, password: string) => {
     try {
+      console.log("🔑 Attempting login for:", username);
       const response = await authApi.login(username, password);
+      console.log("✅ Raw API Response:", response);
       const data = response.data as LoginResponse;
+      console.log("✅ Parsed Data:", data);
       setToken(data.access_token);
       setUser(data.user);
       setShowWelcome(true); // <--- INSTANT TRIGGER
@@ -315,6 +318,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem('user_role', data.user.role);
       axios.defaults.headers.common['Authorization'] = `Bearer ${data.access_token}`;
     } catch (error) {
+      console.error("❌ LOGIN FAILED IN BROWSER:", error);
       throw error;
     }
   };
