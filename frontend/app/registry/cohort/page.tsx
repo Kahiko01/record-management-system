@@ -15,7 +15,6 @@ export default function CohortManagement() {
 
   const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : "";
 
-  // 🔐 ZERO TRUST: Check granular task permission
   const canManage = hasTask("registry:manage_cohort") || hasTask("finance:update_cohort_fees") || hasTask("exam:update_cohort_status") || user?.role === 'super_admin';
 
   if (!canManage) {
@@ -36,8 +35,7 @@ export default function CohortManagement() {
       });
       const data = await res.json();
       const students = data.students || data.items || [];
-      
-      // Create CSV with all student data + empty department columns
+
       const headers = ["admission_number", "first_name", "last_name", "program", "year_of_study", "total_fee", "paid_fee", "exam_status", "accommodation_status"];
       const csvContent = [
         headers.join(","),
@@ -49,8 +47,8 @@ export default function CohortManagement() {
           s.year_of_study || 1,
           s.total_fee || 0,
           s.paid_fee || 0,
-          "PENDING", // Default exam status
-          "PENDING"  // Default accommodation status
+          "PENDING",
+          "PENDING"
         ].join(","))
       ].join("\n");
 
@@ -70,26 +68,72 @@ export default function CohortManagement() {
     setUploading(true);
     setResult(null);
 
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("required_task", selectedTask);
-
     try {
-      const response = await fetch("http://127.0.0.1:8000/students/cohort/update", {
-        method: "POST",
-        headers: { "Authorization": `Bearer ${token}` },
-        body: formData,
-      });
+      const text = await file.text();
+      const lines = text.split("\n").filter(line => line.trim() !== "");
+      if (lines.length < 2) throw new Error("CSV file is empty or invalid");
 
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.detail || "Upload failed");
+      const headers = lines[0].split(",").map(h => h.trim().replace(/"/g, "").toLowerCase());
+      console.log("=== CSV DEBUG INFO ===");
+      console.log("Detected headers:", headers);
+      console.log("Total lines:", lines.length);
+      if (lines.length > 1) {
+        console.log("First data row:", lines[1]);
       }
       
+      const studentsData = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        const values = lines[i].split(",").map(v => v.trim().replace(/"/g, ""));
+        const rowMap: any = {};
+        headers.forEach((h, idx) => { rowMap[h] = values[idx] !== undefined ? values[idx] : ""; });
+
+        console.log(`Row ${i} parsed:`, rowMap);
+
+        const studentId = rowMap["student_id"] || rowMap["admission_number"] || "";
+        const firstName = rowMap["first_name"] || "";
+        const lastName = rowMap["last_name"] || "";
+        const email = rowMap["email"] || `${studentId.toLowerCase().replace(/[^a-z0-9]/g, "")}@student.uni.ac.ke`;
+        const program = rowMap["program"] || rowMap["programme"] || "Unknown";
+        const yearOfStudy = parseInt(rowMap["year_of_study"]) || 1;
+
+        console.log(`Row ${i} mapped:`, { studentId, firstName, lastName });
+
+        if (studentId && firstName && lastName) {
+          studentsData.push({
+            student_id: studentId,
+            first_name: firstName,
+            last_name: lastName,
+            email: email,
+            program: program,
+            year_of_study: yearOfStudy
+          });
+        }
+      }
+      
+      console.log("Valid students found:", studentsData.length);
+
+      if (studentsData.length === 0) throw new Error("No valid student rows found in CSV.");
+
+      const response = await fetch("http://127.0.0.1:8000/students/bulk-import", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}` 
+        },
+        body: JSON.stringify(studentsData),
+      });
+
       const data = await response.json();
+
+      if (!response.ok) {
+        console.error("Backend Error:", data);
+        throw new Error(data.detail ? JSON.stringify(data.detail) : "Upload failed");
+      }
+
       setResult({
-        success: data.success_count,
-        errors: data.error_count,
+        success: data.created || 0,
+        errors: data.errors ? data.errors.length : 0,
         errorDetails: data.errors || []
       });
       setFile(null);
@@ -112,27 +156,25 @@ export default function CohortManagement() {
           <p className="text-gray-500 dark:text-gray-400">Download the master list, update your department's columns, and upload to merge changes safely.</p>
         </div>
 
-        {/* Step 1: Download */}
         <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
           <h2 className="text-lg font-semibold mb-3 flex items-center gap-2 text-gray-900 dark:text-white">
             <Download className="w-5 h-5 text-blue-600" /> Step 1: Download Master Cohort List
           </h2>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">This CSV contains all active students. Add or update your department's specific columns (e.g., Finance adds 'paid_fee', Exams adds 'exam_status').</p>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">This CSV contains all active students. Add or update your department's specific columns.</p>
           <button onClick={downloadMasterList} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium">
             <Download className="w-4 h-4" /> Download Master List.csv
           </button>
         </div>
 
-        {/* Step 2: Upload */}
         <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
           <h2 className="text-lg font-semibold mb-3 flex items-center gap-2 text-gray-900 dark:text-white">
             <Upload className="w-5 h-5 text-green-600" /> Step 2: Upload Department Updates
           </h2>
-          
+
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Select Your Department Task</label>
-            <select 
-              value={selectedTask} 
+            <select
+              value={selectedTask}
               onChange={(e) => setSelectedTask(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
             >
@@ -164,7 +206,6 @@ export default function CohortManagement() {
           </button>
         </div>
 
-        {/* Results */}
         {result && (
           <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
             <h2 className="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Merge Results</h2>

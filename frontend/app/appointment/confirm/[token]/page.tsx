@@ -254,7 +254,17 @@ export default function ConfirmAppointmentPage() {
               })}
             </div>
 
-            {!appointmentData.overall_cleared && (
+            {appointmentData.overall_cleared ? (
+              <div className="mt-6 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-4 flex gap-3">
+                <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-lg font-bold text-green-900 dark:text-green-300">🎉 FULLY CLEARED 🎉</p>
+                  <p className="text-sm text-green-800 dark:text-green-400 mt-1">
+                    Congratulations! All departments have cleared you. You are ready for certificate collection.
+                  </p>
+                </div>
+              </div>
+            ) : (
               <div className="mt-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 flex gap-3">
                 <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
                 <div>

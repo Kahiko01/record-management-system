@@ -54,6 +54,8 @@ export default function RegistryDashboard() {
   const [stats, setStats] = useState<any>({ totalCertificates: 124, readyForCollection: 86, awaitingCollection: 42, collected: 918, onHold: 5, pendingVerification: 7, appointmentsToday: 12, clearedStudents: 103 });
   const [certificates, setCertificates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exportingCsv, setExportingCsv] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : "";
 
   useEffect(() => {
@@ -84,6 +86,60 @@ export default function RegistryDashboard() {
     } catch (err) { console.error(err); } finally { setLoading(false); }
   };
 
+  const handleExportCsv = async () => {
+    setExportingCsv(true);
+    try {
+      const res = await fetch("http://127.0.0.1:8000/certificates/export", {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.status === 200) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "registry_export.csv";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      } else {
+        alert("Failed to export CSV");
+      }
+    } catch (err) {
+      console.error("CSV Export Error:", err);
+      alert("An error occurred during CSV export");
+    } finally {
+      setExportingCsv(false);
+    }
+  };
+
+  const handleExportPdf = async () => {
+    setExportingPdf(true);
+    try {
+      const res = await fetch("http://127.0.0.1:8000/certificates/export-pdf", {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.status === 200) {
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "registry_export.pdf";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+      } else {
+        alert("Failed to export PDF");
+      }
+    } catch (err) {
+      console.error("PDF Export Error:", err);
+      alert("An error occurred during PDF export");
+    } finally {
+      setExportingPdf(false);
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     const m: Record<string, string> = {
       awaiting_clearance: "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400",
@@ -104,9 +160,23 @@ export default function RegistryDashboard() {
           </h1>
           <p className="text-slate-500 dark:text-slate-400 mt-1">Manage certificates, collections, and student verifications</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-3 flex-wrap">
           <button onClick={fetchData} className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition">
             <RefreshCw className="h-4 w-4" /> Refresh
+          </button>
+          <button 
+            onClick={handleExportCsv} 
+            disabled={exportingCsv || exportingPdf} 
+            className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition disabled:opacity-50"
+          >
+            <Download className="h-4 w-4" /> {exportingCsv ? "Exporting CSV..." : "Export CSV"}
+          </button>
+          <button 
+            onClick={handleExportPdf} 
+            disabled={exportingCsv || exportingPdf} 
+            className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition disabled:opacity-50"
+          >
+            <FileText className="h-4 w-4" /> {exportingPdf ? "Exporting PDF..." : "Export PDF"}
           </button>
           <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition shadow-sm">
             <Plus className="h-4 w-4" /> New Certificate
@@ -219,11 +289,26 @@ export default function RegistryDashboard() {
                   <p className="text-xs text-slate-500">Final handover</p>
                 </div>
               </Link>
-              <button className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-500/10 border border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-500/30 transition group">
+              <button 
+                onClick={handleExportCsv} 
+                disabled={exportingCsv || exportingPdf} 
+                className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-500/10 border border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-500/30 transition group disabled:opacity-50"
+              >
                 <BarChart3 className="h-5 w-5 text-slate-500 group-hover:text-blue-600" />
                 <div className="text-left">
-                  <p className="text-sm font-medium text-slate-900 dark:text-white">Generate Report</p>
-                  <p className="text-xs text-slate-500">Export data</p>
+                  <p className="text-sm font-medium text-slate-900 dark:text-white">{exportingCsv ? "Exporting..." : "Generate Report"}</p>
+                  <p className="text-xs text-slate-500">Export data as CSV</p>
+                </div>
+              </button>
+              <button 
+                onClick={handleExportPdf} 
+                disabled={exportingCsv || exportingPdf} 
+                className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-500/10 border border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-500/30 transition group disabled:opacity-50"
+              >
+                <FileText className="h-5 w-5 text-slate-500 group-hover:text-blue-600" />
+                <div className="text-left">
+                  <p className="text-sm font-medium text-slate-900 dark:text-white">{exportingPdf ? "Exporting..." : "Generate PDF Report"}</p>
+                  <p className="text-xs text-slate-500">Export data as PDF</p>
                 </div>
               </button>
             </div>

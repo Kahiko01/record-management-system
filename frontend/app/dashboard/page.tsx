@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useAuth, Permission } from "../context/AuthContext";
 import Link from "next/link";
 import {
@@ -127,6 +127,8 @@ export default function RegistryDashboard() {
   const [statusFilter, setStatusFilter] = useState("all");
 
   // Security Guard
+  const pathname = usePathname();
+
   useEffect(() => {
     if (!authLoading) {
       if (!isAuthenticated) {

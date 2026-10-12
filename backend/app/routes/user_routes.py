@@ -122,7 +122,7 @@ async def create_user(
         "dean": UserRole.DEAN,
         "registry_officer": UserRole.REGISTRY_OFFICER,     # <-- Already correct
         "internal_auditor": UserRole.INTERNAL_AUDITOR,
-        "student": UserRole.STUDENT,
+        "student": None  # Students are records, not system users,
     }
 
     # Clean up the string (e.g. "Registry Officer" -> "registry_officer")
@@ -397,3 +397,52 @@ async def update_user_tasks(
                     f"Updated tasks for user: {user.username}")
 
     return {"message": "Tasks updated successfully"}
+
+
+@router.get("/roles-with-tasks")
+async def get_roles_with_tasks(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get all roles with their assigned tasks (excluding student role)"""
+    
+    # Get all roles except student
+    roles = db.query(Role).filter(Role.name != "student", Role.is_active == True).all()
+    
+    result = []
+    for role in roles:
+        # Get all tasks assigned to this role
+        role_tasks = db.query(RoleTask).filter(
+            RoleTask.role_id == role.id,
+            RoleTask.is_enabled == True
+        ).all()
+        
+        task_ids = [rt.task_id for rt in role_tasks]
+        tasks = db.query(Task).filter(Task.id.in_(task_ids), Task.is_active == True).all()
+        
+        # Count users with this role
+        user_count = db.query(User).filter(
+            User.active_role_id == role.id,
+            User.is_active == True
+        ).count()
+        
+        result.append({
+            "id": role.id,
+            "name": role.name,
+            "display_name": role.display_name,
+            "department": role.department,
+            "description": role.description,
+            "user_count": user_count,
+            "tasks": [
+                {
+                    "id": task.id,
+                    "code": task.code,
+                    "name": task.name,
+                    "description": task.description,
+                    "category": task.category
+                }
+                for task in tasks
+            ]
+        })
+    
+    return result

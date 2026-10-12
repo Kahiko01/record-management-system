@@ -245,3 +245,127 @@ async def release_certificate(
         "certificate_id": certificate_id,
         "certificate_number": cert.certificate_number
     }
+
+import csv
+import io
+from fastapi.responses import StreamingResponse
+
+@router.get("/export")
+async def export_certificates_csv(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission(Permission.REGISTRY_VIEW_INVENTORY))
+):
+    """Export all registry certificates and student details to a CSV file"""
+    # Query all certificates joined with student info
+    results = db.query(RegistryInventory, Student).join(
+        Student, RegistryInventory.student_id == Student.id
+    ).order_by(RegistryInventory.created_at.desc()).all()
+
+    # Create an in-memory text stream for the CSV
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Write the header row
+    writer.writerow([
+        "Certificate Number", "Student Name", "Admission Number", 
+        "Programme", "Department", "Certificate Type", "Status", 
+        "Finance Cleared", "Storage Location", "Created At"
+    ])
+
+    # Write the data rows
+    for cert, student in results:
+        # Check finance clearance
+        try:
+            from app.models.models import ClearanceRequest
+            clearance = db.query(ClearanceRequest).filter(ClearanceRequest.student_id == student.id).first()
+            finance_cleared = "Yes" if (clearance and getattr(clearance, 'finance_cleared', False)) else "No"
+        except:
+            finance_cleared = "Unknown"
+
+        writer.writerow([
+            cert.certificate_number,
+            student.full_name if student else "Unknown",
+            student.admission_number if student else "N/A",
+            cert.programme or (student.programme if student else "N/A"),
+            student.department if student else "N/A",
+            cert.certificate_type or "Diploma",
+            cert.status.value if hasattr(cert.status, "value") else str(cert.status),
+            finance_cleared,
+            cert.storage_location or "Unassigned",
+            cert.created_at.strftime("%Y-%m-%d %H:%M") if cert.created_at else "N/A"
+        ])
+
+    # Move cursor to the beginning of the stream
+    output.seek(0)
+    
+    # Return as a streaming CSV response
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=Registry_Report_{datetime.utcnow().strftime('%Y%m%d')}.csv"}
+    )
+
+import io
+from fastapi.responses import StreamingResponse
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib import colors
+
+@router.get("/export-pdf")
+async def export_certificates_pdf(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission(Permission.REGISTRY_VIEW_INVENTORY))
+):
+    """Export all registry certificates and student details to a PDF file"""
+    results = db.query(RegistryInventory, Student).join(
+        Student, RegistryInventory.student_id == Student.id
+    ).order_by(RegistryInventory.created_at.desc()).all()
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter)
+    elements = []
+    styles = getSampleStyleSheet()
+    
+    elements.append(Paragraph("Registry Certificate Report", styles['Title']))
+    elements.append(Spacer(1, 12))
+    
+    data = [["Cert Number", "Student Name", "Admission No", "Programme", "Status", "Finance Cleared"]]
+    for cert, student in results:
+        try:
+            from app.models.models import ClearanceRequest
+            clearance = db.query(ClearanceRequest).filter(ClearanceRequest.student_id == student.id).first()
+            finance_cleared = "Yes" if (clearance and getattr(clearance, 'finance_cleared', False)) else "No"
+        except:
+            finance_cleared = "Unknown"
+            
+        data.append([
+            cert.certificate_number,
+            student.full_name if student else "Unknown",
+            student.admission_number if student else "N/A",
+            cert.programme or (student.programme if student else "N/A"),
+            cert.status.value if hasattr(cert.status, "value") else str(cert.status),
+            finance_cleared
+        ])
+
+    table = Table(data)
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor("#1e293b")),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor("#f8fafc")),
+        ('GRID', (0, 0), (-1, -1), 1, colors.HexColor("#cbd5e1")),
+        ('FONTSIZE', (0, 0), (-1, -1), 8)
+    ]))
+    
+    elements.append(table)
+    doc.build(elements)
+    buffer.seek(0)
+    
+    return StreamingResponse(
+        iter([buffer.getvalue()]),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=Registry_Report_{datetime.utcnow().strftime('%Y%m%d')}.pdf"}
+    )
